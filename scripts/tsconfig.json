@@ -1,10 +1,9 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./",
     "noEmit": true,
     "module": "ES2022",
     "moduleResolution": "bundler"
   },
-  "include": ["./*.ts"]
+  "include": ["./*.ts", "../agents/src/wallets.ts", "../agents/src/display_names.ts"]
 }
