@@ -29,10 +29,17 @@ RUN go mod download \
 
 # ─── stage 2: agent JS (Node) ────────────────────────────────────────────
 FROM node:20-alpine AS agent-build
+# Native build tools so the optional deps of `ws` (bufferutil, utf-8-validate)
+# can compile. Without these, npm install fails on alpine which lacks python.
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY agents/package.json ./
 RUN npm install --legacy-peer-deps --no-audit --no-fund
+# agents/tsconfig.json extends ../tsconfig.json so we need both. We mount
+# the root one one level up and rewrite the extends to the absolute path.
+COPY tsconfig.json /tsconfig.json
 COPY agents/tsconfig.json ./
+RUN sed -i 's|"../tsconfig.json"|"/tsconfig.json"|' tsconfig.json
 COPY agents/src ./src
 RUN npx tsc -p tsconfig.json
 
