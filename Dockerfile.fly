@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1.7
+#
+# Packed-fleet image for Fly.io: 60 agent processes + axl-spoke gossip hub
+# under one supervisord. Built and deployed via fly_fleet.toml.
+#
+# Stage layout:
+#   1. axl-build : compile the axl daemon from source (Go)
+#   2. agent-build : compile the agent TS to JS (Node)
+#   3. runtime : alpine + node + supervisord, both binaries copied in
+#
+# Architecture note: Fly remote builders default to amd64. Building axl from
+# source instead of pulling the upstream ghcr.io image keeps us self-contained
+# (no GHCR auth) and arch-correct.
+
+# ─── stage 1: axl daemon (Go) ────────────────────────────────────────────
+ARG AXL_REF=9cba555ff0b8e14ebf1244ae02b274fbc4ec044e
+
+FROM golang:1.25-alpine AS axl-build
+ARG AXL_REF
+RUN apk add --no-cache git
+WORKDIR /src
+RUN git clone https://github.com/gensyn-ai/axl.git axl \
+ && cd axl \
+ && git checkout "$AXL_REF" \
+ && git rev-parse HEAD > /AXL_COMMIT
+WORKDIR /src/axl
+RUN go mod download \
+ && go build -trimpath -ldflags="-s -w" -o /out/axl-hub ./cmd/node
+
+# ─── stage 2: agent JS (Node) ────────────────────────────────────────────
+FROM node:20-alpine AS agent-build
+WORKDIR /app
+COPY agents/package.json ./
+RUN npm install --legacy-peer-deps --no-audit --no-fund
+COPY agents/tsconfig.json ./
+COPY agents/src ./src
+RUN npx tsc -p tsconfig.json
+
+# ─── stage 3: runtime ────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+RUN apk add --no-cache supervisor openssl ca-certificates
+
+WORKDIR /app
+
+# Axl daemon + spoke config + key bootstrap.
+COPY --from=axl-build /out/axl-hub /usr/local/bin/axl-hub
+COPY --from=axl-build /AXL_COMMIT /AXL_COMMIT
+COPY infrastructure/axl-spoke.json /etc/axl/spoke.json
+COPY infrastructure/generate-key.sh /usr/local/bin/generate-key.sh
+RUN chmod +x /usr/local/bin/generate-key.sh /usr/local/bin/axl-hub
+
+# Agent JS + dependencies.
+COPY --from=agent-build /app/node_modules /app/node_modules
+COPY --from=agent-build /app/dist /app/dist
+COPY --from=agent-build /app/package.json /app/
+
+# Supervisord config (1 spoke + 60 agents, generated from agents/src/wallets.ts).
+COPY infrastructure/supervisord.conf /etc/supervisord.conf
+
+ENV NODE_ENV=production LOG_LEVEL=info AXL_CONFIG=/etc/axl/spoke.json KEY_PATH=/data/private.pem
+EXPOSE 9002
+
+# /data is the Fly volume mount. generate-key.sh runs once per boot so the
+# spoke's ed25519 identity is created on first run and reused thereafter.
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/generate-key.sh && exec supervisord -c /etc/supervisord.conf -n"]
