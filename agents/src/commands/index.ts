@@ -1,5 +1,6 @@
 import type { Command, CommandResult } from "../db.js";
 import type { AmbientContext } from "../context.js";
+import { runAttack } from "./attack.js";
 
 /**
  * Dispatch a command to its handler. Each handler file plugs into the switch
@@ -8,6 +9,8 @@ import type { AmbientContext } from "../context.js";
  */
 export async function runCommand(cmd: Command, ctx: AmbientContext): Promise<CommandResult> {
   switch (cmd.commandType) {
+    case "attack":
+      return runAttack(cmd, ctx);
     default:
       ctx.log.warn("unknown command_type", { command_type: cmd.commandType, command_id: cmd.id });
       return {
