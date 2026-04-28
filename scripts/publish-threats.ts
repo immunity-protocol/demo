@@ -12,7 +12,13 @@
  *   AXL_URL               (the local spoke or any reachable axl node)
  *   MOCK_USDC_ADDRESS     (Galileo MockUSDC)
  */
-import { Immunity, parseUsdc, type AntibodySeed, type PublishInput } from "@immunity-protocol/sdk";
+import {
+  DuplicateAntibodyError,
+  Immunity,
+  parseUsdc,
+  type AntibodySeed,
+  type PublishInput,
+} from "@immunity-protocol/sdk";
 import { JsonRpcProvider, Wallet, Contract, type ContractTransactionResponse, parseUnits } from "ethers";
 import { promises as fs } from "node:fs";
 
@@ -133,10 +139,14 @@ async function main(): Promise<void> {
   const state = await loadState();
   const seen = new Set(state.published.map((p) => entryKey(p.source_file, p.entry_index)));
 
+  // Optional cap: useful for smoke-testing without burning the full catalog.
+  // Counts NEW publishes only; skipped (already-published) entries do not count.
+  const limit = process.env.LIMIT ? Number.parseInt(process.env.LIMIT, 10) : Infinity;
+
   let publishedThisRun = 0;
   let skipped = 0;
 
-  for (const file of FILES) {
+  outer: for (const file of FILES) {
     const fullPath = path.join(THREATS_DIR, file);
     const raw = await fs.readFile(fullPath, "utf8");
     const entries = JSON.parse(raw) as ThreatEntry[];
@@ -196,14 +206,24 @@ async function main(): Promise<void> {
           `context=${(result.contextHash ?? "").slice(0, 10)}… (${result.txHash})`
         );
       } catch (err) {
+        if (err instanceof DuplicateAntibodyError) {
+          // Already on-chain (likely from a previous run, a different
+          // publisher, or the legacy admin path). Record it as skipped and
+          // keep going.
+          skipped++;
+          console.log(`- ${file}#${i} already on-chain (duplicate), skipping`);
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          continue;
+        }
         console.error(`✗ ${file}#${i} failed: ${String(err)}`);
-        // Stop on first failure so the operator can investigate. State is
-        // already persisted up to the last success, so resume just works.
+        // Stop on unexpected failure so the operator can investigate. State
+        // is already persisted up to the last success, so resume just works.
         await immunity.stop();
         process.exit(1);
       }
       // Pace ourselves so the chain has time between publishes.
       await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (publishedThisRun >= limit) break outer;
     }
   }
 
