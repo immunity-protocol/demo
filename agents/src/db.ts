@@ -26,7 +26,11 @@ export function connectPool(databaseUrl: string): Pool {
   }
   pool = new Pool({
     connectionString: databaseUrl,
-    max: 4,
+    // Packed-fleet deployment runs all 60 agents on one Fly machine; with
+    // pool max=4 we'd reserve 240 conns and saturate the Fly Postgres
+    // ceiling. max=2 gives 120, which fits comfortably alongside the
+    // indexer / app / api / relayer connections.
+    max: 2,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
     application_name: "immunity-demo-agent",
