@@ -1,6 +1,7 @@
 import type { Command, CommandResult } from "../db.js";
 import type { AmbientContext } from "../context.js";
 import { runAttack } from "./attack.js";
+import { runCheckOnly } from "./check_only.js";
 import { runExternalThreatAlert } from "./external_threat_alert.js";
 import { runManipulate } from "./manipulate.js";
 import { runSwap } from "./swap.js";
@@ -20,6 +21,8 @@ export async function runCommand(cmd: Command, ctx: AmbientContext): Promise<Com
       return runExternalThreatAlert(cmd, ctx);
     case "swap":
       return runSwap(cmd, ctx);
+    case "check_only":
+      return runCheckOnly(cmd, ctx);
     default:
       ctx.log.warn("unknown command_type", { command_type: cmd.commandType, command_id: cmd.id });
       return {
