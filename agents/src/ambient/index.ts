@@ -1,5 +1,6 @@
 import type { AmbientContext } from "../context.js";
 import type { AgentRole } from "../wallets.js";
+import { runTraderAmbient } from "./trader.js";
 
 /**
  * Per-tick ambient action for the given role. Each role file plugs into the
@@ -10,7 +11,7 @@ import type { AgentRole } from "../wallets.js";
  */
 export async function runAmbient(role: AgentRole, ctx: AmbientContext): Promise<void> {
   switch (role) {
-    case "trader":
+    case "trader":   return runTraderAmbient(ctx);
     case "wolf":
     case "publisher":
     case "watcher":
