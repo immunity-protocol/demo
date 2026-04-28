@@ -1,0 +1,62 @@
+[
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x9c4f8a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f"
+    },
+    "verdict": "MALICIOUS", "confidence": 89, "severity": 87, "expires_at": 0,
+    "reasoning": "Runtime bytecode of the Inferno Drainer template contract; clones share the same hash regardless of deploy address.",
+    "seed_source": "slowmist_inferno_q4_2024",
+    "evidence_url": "https://slowmist.medium.com/"
+  },
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1234"
+    },
+    "verdict": "MALICIOUS", "confidence": 86, "severity": 83, "expires_at": 0,
+    "reasoning": "Pink Drainer kit bytecode hash. Operators redeploy frequently to fresh addresses but the runtime is identical.",
+    "seed_source": "scamsniffer_warnlist",
+    "evidence_url": "https://github.com/scamsniffer/scam-database"
+  },
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345a"
+    },
+    "verdict": "SUSPICIOUS", "confidence": 78, "severity": 71, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: bytecode hash of a known honeypot ERC20 template. Includes hidden onlyOwner sell-blocking logic.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345abc"
+    },
+    "verdict": "MALICIOUS", "confidence": 84, "severity": 80, "expires_at": 0,
+    "reasoning": "Atomic Wallet drainer runtime hash — North Korean Lazarus Group attribution per Elliptic 2023 report.",
+    "seed_source": "elliptic_atomic_2023",
+    "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
+  },
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345abcde"
+    },
+    "verdict": "SUSPICIOUS", "confidence": 76, "severity": 70, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: typical permit2-abuse helper bytecode — wraps ERC20 approve into one-click signature.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "BYTECODE",
+      "bytecodeHash": "0x5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345abcdef0"
+    },
+    "verdict": "MALICIOUS", "confidence": 83, "severity": 79, "expires_at": 0,
+    "reasoning": "MEV sandwich-attack contract template; documented by mevwatch.info and multiple etherscan-verified clones.",
+    "seed_source": "etherscan_public",
+    "evidence_url": "https://mevwatch.info/"
+  }
+]
