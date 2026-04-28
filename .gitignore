@@ -1,0 +1,20 @@
+.env
+.env.local
+.env.*.local
+
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+.publish-state.json
+.fund-state.json
+
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Generated docker-compose can be regenerated; we still commit it so the
+# repo is runnable out of the box. Override files (overrides.yml) stay local.
+docker-compose.override.yml
