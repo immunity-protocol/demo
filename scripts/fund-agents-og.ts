@@ -10,7 +10,7 @@
  *   DEPLOYER_PRIVATE_KEY  funded with at least (60 × OG_FUND_TARGET) OG
  *   MASTER_SEED           BIP-39 mnemonic that derives the 60 agent wallets
  *   GALILEO_RPC_URL       (defaults to https://evmrpc-testnet.0g.ai)
- *   OG_FUND_TARGET        (default 0.5)
+ *   OG_FUND_TARGET        (default 0.3)
  */
 import { JsonRpcProvider, Wallet, parseEther, formatEther } from "ethers";
 import { allAgentSlots, deriveWallet } from "../agents/src/wallets.js";
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   const deployerPk = requireEnv("DEPLOYER_PRIVATE_KEY");
   const masterSeed = requireEnv("MASTER_SEED");
   const rpcUrl = process.env.GALILEO_RPC_URL ?? "https://evmrpc-testnet.0g.ai";
-  const target = parseEther(process.env.OG_FUND_TARGET ?? "0.5");
+  const target = parseEther(process.env.OG_FUND_TARGET ?? "0.3");
 
   const provider = new JsonRpcProvider(rpcUrl);
   const deployer = new Wallet(deployerPk, provider);

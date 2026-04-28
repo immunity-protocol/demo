@@ -1,8 +1,8 @@
 # immunity-demo
 
-Demo orchestration for the [Immunity protocol](https://github.com/ophelios-studio/immunity-sdk): 60 containerized AI agents producing continuous, realistic on-chain activity against the live 0G Galileo testnet, plus an interactive `/playground` UI for triggering specific scenarios on demand.
+Demo orchestration for the [Immunity protocol](https://immunity-protocol.com): 60 containerized AI agents producing continuous, realistic on-chain activity against the live 0G Galileo testnet, plus an interactive `/playground` UI for triggering specific scenarios on demand.
 
-The fleet is the heart of the demo. When it's running, the network looks alive. When you trigger a scenario from `/playground`, the right thing happens onstage.
+The fleet is the heart of the demo. When it's running, the network looks alive.
 
 > Hackathon-only. Test mnemonics, public testnet, MockUSDC. Do not point at mainnet.
 
@@ -55,7 +55,7 @@ A Hetzner CPX21 / DigitalOcean $24-tier droplet is enough.
 2. **Copy and edit env**:
    ```sh
    cp .env.example .env
-   # Fill in DEPLOYER_PRIVATE_KEY (must hold ~30 OG and ~80 USDC).
+   # Fill in DEPLOYER_PRIVATE_KEY (must hold ~18 OG and ~80 USDC).
    # Adjust DATABASE_URL if your immunity-app uses a different host name.
    ```
 
@@ -67,7 +67,7 @@ A Hetzner CPX21 / DigitalOcean $24-tier droplet is enough.
    ```
    Confirms `demo.commands`, `demo.fleet_state`, `demo.agent_heartbeat` exist.
 
-4. **Fund agents with OG gas** (~30 OG total):
+4. **Fund agents with OG gas** (~18 OG total):
    ```sh
    npm run fund:og
    ```
