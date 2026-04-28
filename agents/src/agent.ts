@@ -1,5 +1,5 @@
 import { Immunity } from "@immunity-protocol/sdk";
-import { type FeeData, JsonRpcProvider, Wallet } from "ethers";
+import { type FeeData, FeeData as FeeDataCtor, JsonRpcProvider, Wallet } from "ethers";
 import { runAmbient } from "./ambient/index.js";
 import { runCommand } from "./commands/index.js";
 import {
@@ -74,10 +74,9 @@ function makeProvider(rpcUrl: string): JsonRpcProvider {
     const cappedTip = tip < MIN_TIP_CAP_WEI ? MIN_TIP_CAP_WEI : tip;
     const base = fee.maxFeePerGas ?? cappedTip * 2n;
     const cappedFee = base < cappedTip ? cappedTip : base;
-    return Object.assign(fee, {
-      maxPriorityFeePerGas: cappedTip,
-      maxFeePerGas: cappedFee,
-    });
+    // FeeData is frozen in ethers v6, so we have to construct a new one
+    // rather than mutating fields.
+    return new FeeDataCtor(fee.gasPrice, cappedFee, cappedTip);
   };
   return provider;
 }
