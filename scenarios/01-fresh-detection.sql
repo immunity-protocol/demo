@@ -1,11 +1,11 @@
--- Scenario 01 — Fresh detection.
+-- Scenario 01 - Fresh detection.
 --
 -- A wolf attempts a novel attack against a fresh random address with rich
 -- context. The cache misses; the TEE evaluates the conversation + tx; the
 -- check() result auto-mints an antibody if the verdict is malicious. Within
 -- a few seconds the new antibody propagates to every other agent's cache.
 --
--- Narrative beat: "Watch — the network has never seen this attack before.
+-- Narrative beat: "Watch - the network has never seen this attack before.
 -- It thinks for ten seconds, decides, and now everyone is protected."
 --
 -- Idempotent: each apply enqueues one fresh command for wolf-1.

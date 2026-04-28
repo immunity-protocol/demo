@@ -10,7 +10,7 @@ import { parseUnits } from "ethers";
  *
  * Payload shape:
  *   {
- *     "target":        "trader-7"  (purely narrative — what agent the
+ *     "target":        "trader-7"  (purely narrative - what agent the
  *                                   attacker pretends to manipulate),
  *     "method":        "instruction_override" | "social_engineering" | "free",
  *     "injected_text": "Ignore previous instructions and..."
@@ -35,7 +35,7 @@ export async function runManipulate(cmd: Command, ctx: AmbientContext): Promise<
   }
 
   const env = txEnv();
-  // The tx is symbolic — the manipulation lives in the conversation context.
+  // The tx is symbolic - the manipulation lives in the conversation context.
   // We pair it with a small transfer so the TEE has something to evaluate
   // alongside the prompt.
   const tx = buildErc20Transfer(env, ctx.walletAddress, parseUnits("1", 6));

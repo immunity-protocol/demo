@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Scenario 05 — Resilience.
+# Scenario 05 - Resilience.
 #
 # Hard-kill 5 random trader containers. Gossip continues from the rest;
 # antibodies still propagate; the dashboard shows agents-online drop, then

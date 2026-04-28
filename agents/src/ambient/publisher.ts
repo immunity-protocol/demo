@@ -13,7 +13,7 @@ import { runTraderAmbient } from "./trader.js";
  * agents. If found, publish an ADDRESS antibody flagging that spender. If
  * not, no-op (the publisher saw nothing worth publishing).
  *
- * The query returns nothing 99% of the time on a healthy fleet — that's by
+ * The query returns nothing 99% of the time on a healthy fleet - that's by
  * design. The publishers that do mint produce the "organic publication"
  * narrative beat for the dashboard.
  */
@@ -65,7 +65,7 @@ export async function runPublisherAmbient(ctx: AmbientContext): Promise<void> {
 async function findSuspects(ctx: AmbientContext): Promise<SuspectRow[]> {
   // Heuristic stub: real implementation would JOIN to a spender column we'd
   // need to add to event.check_event. For v1 we look at recent block_events
-  // pointing at the same entry — these surface "lots of agents bumping into
+  // pointing at the same entry - these surface "lots of agents bumping into
   // the same threat" and any not-yet-mirrored variants are worth re-flagging.
   const since = new Date(Date.now() - HEURISTIC_WINDOW_MIN * 60_000).toISOString();
   const res = await ctx.pool.query<{ spender: string; approvals: number; distinct_agents: number }>(
@@ -90,7 +90,7 @@ async function findSuspects(ctx: AmbientContext): Promise<SuspectRow[]> {
 }
 
 function pickConfidence(min: number, max: number): number {
-  // Avoid round numbers — confidence values like 90/85/80 read as suspiciously
+  // Avoid round numbers - confidence values like 90/85/80 read as suspiciously
   // human-rounded. Pick from the gaps instead.
   const candidates: number[] = [];
   for (let n = min; n <= max; n++) {

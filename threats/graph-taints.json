@@ -13,7 +13,7 @@
       "taintSetId": "0x746f726e61646f00000000000000000000000000000000000000000000000001"
     },
     "verdict": "MALICIOUS", "confidence": 93, "severity": 89, "expires_at": 0,
-    "reasoning": "OFAC SDN Tornado Cash output set — any 1-hop downstream address inherits SDN-derived risk per Treasury guidance.",
+    "reasoning": "OFAC SDN Tornado Cash output set - any 1-hop downstream address inherits SDN-derived risk per Treasury guidance.",
     "seed_source": "ofac_sdn",
     "evidence_url": "https://ofac.treasury.gov/recent-actions/20220808"
   },
@@ -27,7 +27,7 @@
       "taintSetId": "0x61746f6d69632d77616c6c65742d6472616e6572000000000000000000000001"
     },
     "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
-    "reasoning": "Atomic Wallet drainer downstream cluster — funds traced through chain-hopping to known mixer cohorts.",
+    "reasoning": "Atomic Wallet drainer downstream cluster - funds traced through chain-hopping to known mixer cohorts.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   },
@@ -42,7 +42,7 @@
       "taintSetId": "0x6472616e65722d63616d706169676e2d3230323400000000000000000000000a"
     },
     "verdict": "MALICIOUS", "confidence": 85, "severity": 82, "expires_at": 0,
-    "reasoning": "Cross-family drainer cluster — Inferno + Pink share laundering rails per ScamSniffer aggregation 2024.",
+    "reasoning": "Cross-family drainer cluster - Inferno + Pink share laundering rails per ScamSniffer aggregation 2024.",
     "seed_source": "scamsniffer_warnlist",
     "evidence_url": "https://github.com/scamsniffer/scam-database"
   },

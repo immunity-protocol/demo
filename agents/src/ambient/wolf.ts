@@ -56,7 +56,7 @@ export async function runWolfAmbient(ctx: AmbientContext): Promise<void> {
       });
     } else {
       // Either novel + TEE said allow, or we drew a clean random address.
-      ctx.log.warn("wolf attack ALLOWED — TEE missed it or pattern is fresh", {
+      ctx.log.warn("wolf attack ALLOWED - TEE missed it or pattern is fresh", {
         method,
         target,
         usdc: formatUsdc(amount),
@@ -75,7 +75,7 @@ function pickMethod(): AttackMethod {
 
 function pickTargetAddress(): string {
   if (Math.random() < NOVEL_ATTACK_RATE) {
-    // Fresh random address — TEE has to evaluate from scratch.
+    // Fresh random address - TEE has to evaluate from scratch.
     return `0x${[...crypto.getRandomValues(new Uint8Array(20))].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
   }
   return pickKnownBad().address;

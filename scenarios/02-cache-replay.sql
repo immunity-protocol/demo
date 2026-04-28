@@ -1,12 +1,12 @@
--- Scenario 02 — Cache replay.
+-- Scenario 02 - Cache replay.
 --
 -- A different wolf attempts an attack against an address the network already
 -- knows about (Atomic Wallet drainer, seeded as IMM-2026-NNNN at startup).
--- The AddressMatcher hits in microseconds — no TEE round-trip, just a cache
+-- The AddressMatcher hits in microseconds - no TEE round-trip, just a cache
 -- block.
 --
 -- Narrative beat: "Same kind of attack. Different attacker. Different
--- target. But the network has the antibody now — block in milliseconds.
+-- target. But the network has the antibody now - block in milliseconds.
 -- The first agent paid the cost. Everyone else benefits forever."
 --
 -- Run this immediately after scenario 01 (or any time after the seeded

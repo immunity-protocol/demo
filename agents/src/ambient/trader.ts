@@ -16,13 +16,13 @@ import { pickKnownBad } from "../threat_targets.js";
  *   70% USDC swap on a known DEX router ($500-$50k, lognormal)
  *   20% USDC transfer to another address ($100-$10k)
  *    5% approve (often MAX_UINT256)
- *    5% no-op tick — looks more natural than constant fire
+ *    5% no-op tick - looks more natural than constant fire
  *
  * ~5% of all txs draw their counterparty from the curated bad-target pool, so
  * the dashboard sees occasional organic blocks even without scenario commands.
  *
  * ~2% of checks include a rich context (conversation + toolTrace) that the
- * TEE has something to chew on — those are the "novel detection" candidates.
+ * TEE has something to chew on - those are the "novel detection" candidates.
  */
 const ORGANIC_BAD_RATE = 0.05;
 const TEE_CONTEXT_RATE = 0.02;

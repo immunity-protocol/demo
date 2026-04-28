@@ -1,6 +1,6 @@
 /**
  * One-shot bootstrap: send native OG to every agent wallet so they have gas
- * for their on-chain check() and publish() calls. Idempotent — checks each
+ * for their on-chain check() and publish() calls. Idempotent - checks each
  * wallet's balance and skips agents already at or above the target.
  *
  * Usage:
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
       chainId,
     });
     console.log(`  fund ${s.agentId.padEnd(12)} ${s.address}  +${formatEther(s.need)} OG  ${tx.hash}`);
-    // Don't wait for receipts on every tx — just on the last so we don't
+    // Don't wait for receipts on every tx - just on the last so we don't
     // race the next script. Sequential nonces handle ordering.
   }
 

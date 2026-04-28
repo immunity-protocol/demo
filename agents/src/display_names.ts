@@ -7,7 +7,7 @@ import type { AgentRole } from "./wallets.js";
  * Naming intent:
  *   - traders: nature/object words that read as benign treasury operators
  *   - wolves: predator imagery so they're easy to spot in stage demos
- *   - publishers: watcher/sentinel imagery — vigilant but neutral
+ *   - publishers: watcher/sentinel imagery - vigilant but neutral
  *   - watcher: a single named external-feed consumer
  *   - scenario: a single named stage actor
  *

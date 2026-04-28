@@ -28,7 +28,7 @@
       "pattern": { "kind": "marker", "value": "you are dan" }
     },
     "verdict": "MALICIOUS", "confidence": 86, "severity": 78, "expires_at": 0,
-    "reasoning": "DAN (Do Anything Now) jailbreak prefix — well-documented adversarial role-play override.",
+    "reasoning": "DAN (Do Anything Now) jailbreak prefix - well-documented adversarial role-play override.",
     "seed_source": "academic_jailbreak_corpus",
     "evidence_url": "https://arxiv.org/abs/2308.03825"
   },
@@ -39,7 +39,7 @@
       "pattern": { "kind": "marker", "value": "system: you are now" }
     },
     "verdict": "MALICIOUS", "confidence": 91, "severity": 84, "expires_at": 0,
-    "reasoning": "Spoofed system role-prefix injection — attempts to convince the agent it received a system message from untrusted content.",
+    "reasoning": "Spoofed system role-prefix injection - attempts to convince the agent it received a system message from untrusted content.",
     "seed_source": "academic_jailbreak_corpus",
     "evidence_url": "https://arxiv.org/abs/2308.03825"
   },
@@ -61,7 +61,7 @@
       "pattern": { "kind": "marker", "value": "your wallet has been compromised" }
     },
     "verdict": "MALICIOUS", "confidence": 88, "severity": 82, "expires_at": 0,
-    "reasoning": "Recovery-scam social-engineering opener — pretexting for permit signature theft.",
+    "reasoning": "Recovery-scam social-engineering opener - pretexting for permit signature theft.",
     "seed_source": "scamsniffer_warnlist",
     "evidence_url": "https://scamsniffer.io/blog"
   },
@@ -83,7 +83,7 @@
       "pattern": { "kind": "marker", "value": "lazarus" }
     },
     "verdict": "MALICIOUS", "confidence": 89, "severity": 86, "expires_at": 0,
-    "reasoning": "Counterparty self-identification or third-party labeling as Lazarus Group — DPRK state-backed APT.",
+    "reasoning": "Counterparty self-identification or third-party labeling as Lazarus Group - DPRK state-backed APT.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   },

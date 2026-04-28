@@ -17,7 +17,7 @@ The fleet runs a single `axl-spoke` container (`ghcr.io/immunity-protocol/axl-hu
 
 ## Identity
 
-The spoke's ed25519 identity is generated on first boot and persisted to the named docker volume `axl-data`. Do not delete this volume between demo runs — your peer ID is the network's stable handle for this fleet's hub view.
+The spoke's ed25519 identity is generated on first boot and persisted to the named docker volume `axl-data`. Do not delete this volume between demo runs - your peer ID is the network's stable handle for this fleet's hub view.
 
 ## Custom config (rare)
 

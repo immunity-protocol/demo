@@ -20,7 +20,7 @@ import { parseUnits } from "ethers";
  *     "target":      "0x..." | "tag:inferno-drainer-1" | undefined (random known-bad),
  *     "amount_usd":  number (default 5000),
  *     "context":     "free text shown in conversation" (optional),
- *     "novel":       true (use a fresh random address — forces TEE evaluation)
+ *     "novel":       true (use a fresh random address - forces TEE evaluation)
  *   }
  *
  * Result detail returned to the playground card:

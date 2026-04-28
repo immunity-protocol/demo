@@ -1,4 +1,4 @@
--- Scenario 04 — Prompt injection.
+-- Scenario 04 - Prompt injection.
 --
 -- Scenario agent (the demo's stage actor) attempts to manipulate the agent
 -- it pretends to talk to. The injected text contains a canonical

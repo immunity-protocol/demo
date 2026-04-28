@@ -21,7 +21,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
-    "reasoning": "approve() to Pink Drainer family contract — selector-only match.",
+    "reasoning": "approve() to Pink Drainer family contract - selector-only match.",
     "seed_source": "scamsniffer_warnlist",
     "evidence_url": "https://github.com/scamsniffer/scam-database"
   },
@@ -34,7 +34,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 89, "severity": 86, "expires_at": 0,
-    "reasoning": "setApprovalForAll(operator, true) to Inferno Drainer — common NFT-drain primitive.",
+    "reasoning": "setApprovalForAll(operator, true) to Inferno Drainer - common NFT-drain primitive.",
     "seed_source": "slowmist_inferno_q4_2024",
     "evidence_url": "https://slowmist.medium.com/"
   },
@@ -73,7 +73,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "SUSPICIOUS", "confidence": 74, "severity": 69, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: transferFrom called on honeypot ERC20 — sells revert post-buy.",
+    "reasoning": "Demo fixture: transferFrom called on honeypot ERC20 - sells revert post-buy.",
     "seed_source": "demo_fabrication",
     "evidence_url": null
   },
@@ -86,7 +86,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 92, "severity": 91, "expires_at": 0,
-    "reasoning": "permit() signature submission to Atomic Wallet drainer — gasless approval-to-drain primitive.",
+    "reasoning": "permit() signature submission to Atomic Wallet drainer - gasless approval-to-drain primitive.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   }

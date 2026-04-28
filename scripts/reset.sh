@@ -21,7 +21,7 @@ if [ -n "${DATABASE_URL:-}" ] || [ -f .env ]; then
 fi
 
 if [ -z "${DATABASE_URL:-}" ]; then
-  echo "WARN: DATABASE_URL not set — skipping queue + heartbeat clear" >&2
+  echo "WARN: DATABASE_URL not set - skipping queue + heartbeat clear" >&2
 else
   echo "clearing demo.commands and demo.agent_heartbeat…"
   docker run --rm --network "${IMMUNITY_DEMO_NETWORK:-immunity-app_default}" \

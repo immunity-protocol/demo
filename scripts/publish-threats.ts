@@ -1,6 +1,6 @@
 /**
  * One-shot bootstrap: publish the curated threat data in /threats to the live
- * Registry. Idempotent — tracks committed antibodies in `.publish-state.json`
+ * Registry. Idempotent - tracks committed antibodies in `.publish-state.json`
  * so reruns skip already-published entries.
  *
  * Usage:
