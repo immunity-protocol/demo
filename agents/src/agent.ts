@@ -57,6 +57,37 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
+ * Retry helper for boot-path operations that touch the 0G public RPC.
+ * The testnet RPC is rate-limited (50 req/s) and occasionally returns
+ * transient errors (timeouts, "no matching receipts", connection drops).
+ * We absorb up to N transient failures with exponential backoff before
+ * giving up; "give up" still throws so the process exits and supervisord
+ * restarts us, but at least we don't die on the first blip.
+ */
+async function withBootRetry<T>(
+  label: string,
+  log: {
+    info: (message: string, fields?: Record<string, unknown>) => void;
+    warn: (message: string, fields?: Record<string, unknown>) => void;
+  },
+  fn: () => Promise<T>,
+  attempts = 5,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const backoffMs = 2_000 * Math.pow(2, i) + Math.floor(Math.random() * 1_000);
+      log.warn("boot step failed; retrying", { step: label, attempt: i + 1, of: attempts, backoff_ms: backoffMs, err: String(err).slice(0, 200) });
+      await sleep(backoffMs);
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Galileo testnet (chain 16602) raised its minimum priority fee to 2 gwei,
  * but ethers' default `getFeeData()` over a vanilla JsonRpcProvider can
  * still return 1 gwei in periods of low congestion, which then gets
@@ -108,9 +139,11 @@ async function main(): Promise<void> {
     axlUrl: cfg.axlUrl,
     novelThreatPolicy: "verify",
   });
-  await immunity.start();
+  await withBootRetry("immunity.start", log, () => immunity.start());
 
-  await ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log);
+  await withBootRetry("ensureFundedWallet", log, () =>
+    ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log),
+  );
 
   const pool = connectPool(cfg.databaseUrl);
   await upsertHeartbeat(pool, {
