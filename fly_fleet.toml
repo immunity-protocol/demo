@@ -1,0 +1,45 @@
+# Fly.io app config for the packed 60-agent demo fleet.
+#
+# One machine runs supervisord, which spawns the axl-spoke gossip hub plus
+# all 60 agent processes (1 spoke + 50 traders + 3 wolves + 5 publishers
+# + 1 watcher + 1 scenario). The image is built from Dockerfile.fly.
+#
+# No HTTP service: agents are pure outbound (chain RPC + Postgres + AXL
+# gossip). Boot the fleet with `./scripts/fly-boot.sh`, fully shut it down
+# with `./scripts/fly-shutdown.sh` to stop billing between sessions.
+#
+# Pause/resume of ambient activity (without stopping the machine) is
+# controlled from /playground -> admin tier, which writes
+# demo.fleet_state.ambient_paused via the existing app endpoints.
+
+app            = 'immunity-fleet'
+primary_region = 'yyz'
+
+[build]
+  dockerfile = 'Dockerfile.fly'
+
+[env]
+  AXL_URL              = 'http://localhost:9002'
+  GALILEO_RPC_URL      = 'https://evmrpc-testnet.0g.ai'
+  GALILEO_CHAIN_ID     = '16602'
+  REGISTRY_ADDRESS     = '0x6FfB52ea1a01ABDe2793f6fca2Ea6661ca75903c'
+  AGENT_TICK_MIN_MS    = '15000'
+  AGENT_TICK_MAX_MS    = '90000'
+  USDC_FUND_TARGET     = '250000'
+  USDC_REGISTRY_TARGET = '10'
+  OG_FUND_TARGET       = '0.3'
+  LOG_LEVEL            = 'info'
+  NODE_ENV             = 'production'
+
+[[mounts]]
+  source      = 'immunity_fleet_data'
+  destination = '/data'
+
+[[vm]]
+  size      = 'shared-cpu-4x'
+  memory    = '8gb'
+  cpu_kind  = 'shared'
+  cpus      = 4
+
+[deploy]
+  strategy = 'immediate'
