@@ -3,6 +3,7 @@ import type { AmbientContext } from "../context.js";
 import { runAttack } from "./attack.js";
 import { runExternalThreatAlert } from "./external_threat_alert.js";
 import { runManipulate } from "./manipulate.js";
+import { runSwap } from "./swap.js";
 
 /**
  * Dispatch a command to its handler. Each handler file plugs into the switch
@@ -17,6 +18,8 @@ export async function runCommand(cmd: Command, ctx: AmbientContext): Promise<Com
       return runManipulate(cmd, ctx);
     case "external_threat_alert":
       return runExternalThreatAlert(cmd, ctx);
+    case "swap":
+      return runSwap(cmd, ctx);
     default:
       ctx.log.warn("unknown command_type", { command_type: cmd.commandType, command_id: cmd.id });
       return {
