@@ -1,0 +1,80 @@
+[
+  {
+    "seed": {
+      "abType": "GRAPH",
+      "chainId": 16602,
+      "taintedAddresses": [
+        "0x8589427373d6d84e98730d7795d8f6f8731fda16",
+        "0x722122df12d4e14e13ac3b6895a86e84145b6967",
+        "0xdd4c48c0b24039969fc16d1cdf626eab821d3384",
+        "0xd90e2f925da726b50c4ed8d0fb90ad053324f31b",
+        "0x910cbd523d972eb0a6f4cae4618ad62622b39dbf"
+      ],
+      "taintSetId": "0x746f726e61646f00000000000000000000000000000000000000000000000001"
+    },
+    "verdict": "MALICIOUS", "confidence": 93, "severity": 89, "expires_at": 0,
+    "reasoning": "OFAC SDN Tornado Cash output set — any 1-hop downstream address inherits SDN-derived risk per Treasury guidance.",
+    "seed_source": "ofac_sdn",
+    "evidence_url": "https://ofac.treasury.gov/recent-actions/20220808"
+  },
+  {
+    "seed": {
+      "abType": "GRAPH",
+      "chainId": 16602,
+      "taintedAddresses": [
+        "0x098b716b8aaf21512996dc57eb0615e2383e2f96"
+      ],
+      "taintSetId": "0x61746f6d69632d77616c6c65742d6472616e6572000000000000000000000001"
+    },
+    "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
+    "reasoning": "Atomic Wallet drainer downstream cluster — funds traced through chain-hopping to known mixer cohorts.",
+    "seed_source": "elliptic_atomic_2023",
+    "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
+  },
+  {
+    "seed": {
+      "abType": "GRAPH",
+      "chainId": 16602,
+      "taintedAddresses": [
+        "0x0000d38a234679f88dd6343d34e26dcb50c30000",
+        "0x9f2c3ad13e0f12c0eb28ddec6eab1d5b4ecc3fcd"
+      ],
+      "taintSetId": "0x6472616e65722d63616d706169676e2d3230323400000000000000000000000a"
+    },
+    "verdict": "MALICIOUS", "confidence": 85, "severity": 82, "expires_at": 0,
+    "reasoning": "Cross-family drainer cluster — Inferno + Pink share laundering rails per ScamSniffer aggregation 2024.",
+    "seed_source": "scamsniffer_warnlist",
+    "evidence_url": "https://github.com/scamsniffer/scam-database"
+  },
+  {
+    "seed": {
+      "abType": "GRAPH",
+      "chainId": 16602,
+      "taintedAddresses": [
+        "0xbadc0debadc0debadc0debadc0debadc0debadc0d",
+        "0xdeadc0dedeadc0dedeadc0dedeadc0dedeadc0de",
+        "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
+      ],
+      "taintSetId": "0x64656d6f2d63616d706169676e2d666978747572650000000000000000000001"
+    },
+    "verdict": "SUSPICIOUS", "confidence": 73, "severity": 68, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: synthesized cluster of demo-fabricated drainers. Used by the wolf attack roll.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "GRAPH",
+      "chainId": 16602,
+      "taintedAddresses": [
+        "0x6b75d8af000000e20b7a7ddf000ba900b4009a80",
+        "0x000000000035b5e5ad9019092c665357240f594e"
+      ],
+      "taintSetId": "0x6d65762d73616e64776963682d626f74732d76310000000000000000000000a0"
+    },
+    "verdict": "SUSPICIOUS", "confidence": 76, "severity": 64, "expires_at": 0,
+    "reasoning": "MEV sandwich-bot cluster. Touches and graph neighbors are extracting value from retail swaps.",
+    "seed_source": "mev_explorer",
+    "evidence_url": "https://mevwatch.info/"
+  }
+]
