@@ -186,7 +186,17 @@ async function main(): Promise<void> {
         input.expiresAt = BigInt(entry.expires_at);
       }
       try {
-        const result = await immunity.publish(input);
+        // 0G storage testnet finality is sometimes minutes-long. Bound each
+        // publish so a stuck upload does not block the rest of the batch:
+        // skip-and-continue, the entry stays unpublished and a later rerun
+        // (when 0G is healthy) picks it back up via the state file.
+        const timeoutMs = Number(process.env.PUBLISH_TIMEOUT_MS ?? 90_000);
+        const result = await Promise.race([
+          immunity.publish(input),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`publish timed out after ${timeoutMs}ms`)), timeoutMs),
+          ),
+        ]);
         const record: PublishedRecord = {
           source_file: file,
           entry_index: i,
@@ -215,9 +225,18 @@ async function main(): Promise<void> {
           await new Promise((resolve) => setTimeout(resolve, 250));
           continue;
         }
-        console.error(`✗ ${file}#${i} failed: ${String(err)}`);
-        // Stop on unexpected failure so the operator can investigate. State
-        // is already persisted up to the last success, so resume just works.
+        const msg = String(err);
+        if (msg.includes("publish timed out") || msg.toLowerCase().includes("storage")) {
+          // Soft failure: 0G storage was slow or flaky. Leave the entry
+          // unrecorded so a later rerun retries it. Keep batching.
+          console.error(`! ${file}#${i} skipped: ${msg.slice(0, 140)}`);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          continue;
+        }
+        console.error(`✗ ${file}#${i} failed: ${msg}`);
+        // Hard failure (likely a bad seed or contract revert). Bail so the
+        // operator can investigate. State is persisted up to the last
+        // success, so resume picks up cleanly.
         await immunity.stop();
         process.exit(1);
       }
