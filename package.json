@@ -9,11 +9,12 @@
     "typecheck": "tsc --noEmit -p agents/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
     "build:agents": "tsc -p agents/tsconfig.json",
     "compose:generate": "tsx scripts/generate-compose.ts",
+    "supervisor:generate": "tsx scripts/generate-supervisor-conf.ts",
     "threats:publish": "tsx --env-file=.env scripts/publish-threats.ts",
     "fund:og": "tsx --env-file=.env scripts/fund-agents-og.ts"
   },
   "devDependencies": {
-    "@immunity-protocol/sdk": "^0.3.0",
+    "@immunity-protocol/sdk": "^0.3.1",
     "@types/node": "^20.14.0",
     "ethers": "^6.14.0",
     "tsx": "^4.16.0",
