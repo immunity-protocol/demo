@@ -1,5 +1,6 @@
 import type { AmbientContext } from "../context.js";
 import type { AgentRole } from "../wallets.js";
+import { runPublisherAmbient } from "./publisher.js";
 import { runTraderAmbient } from "./trader.js";
 import { runWolfAmbient } from "./wolf.js";
 
@@ -14,7 +15,7 @@ export async function runAmbient(role: AgentRole, ctx: AmbientContext): Promise<
   switch (role) {
     case "trader":   return runTraderAmbient(ctx);
     case "wolf":     return runWolfAmbient(ctx);
-    case "publisher":
+    case "publisher":return runPublisherAmbient(ctx);
     case "watcher":
     case "scenario":
       ctx.log.debug("ambient role not yet wired", { role });
