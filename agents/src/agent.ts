@@ -1,5 +1,5 @@
 import { Immunity } from "@immunity-protocol/sdk";
-import { JsonRpcProvider, Wallet } from "ethers";
+import { type FeeData, JsonRpcProvider, Wallet } from "ethers";
 import { runAmbient } from "./ambient/index.js";
 import { runCommand } from "./commands/index.js";
 import {
@@ -56,15 +56,49 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * Galileo testnet (chain 16602) raised its minimum priority fee to 2 gwei,
+ * but ethers' default `getFeeData()` over a vanilla JsonRpcProvider can
+ * still return 1 gwei in periods of low congestion, which then gets
+ * rejected with "transaction gas price below minimum". We wrap the
+ * provider to floor the tip cap at 2 gwei.
+ */
+const MIN_TIP_CAP_WEI = 2_000_000_000n;
+
+function makeProvider(rpcUrl: string): JsonRpcProvider {
+  const provider = new JsonRpcProvider(rpcUrl);
+  const original = provider.getFeeData.bind(provider);
+  provider.getFeeData = async (): Promise<FeeData> => {
+    const fee = await original();
+    const tip = fee.maxPriorityFeePerGas ?? MIN_TIP_CAP_WEI;
+    const cappedTip = tip < MIN_TIP_CAP_WEI ? MIN_TIP_CAP_WEI : tip;
+    const base = fee.maxFeePerGas ?? cappedTip * 2n;
+    const cappedFee = base < cappedTip ? cappedTip : base;
+    return Object.assign(fee, {
+      maxPriorityFeePerGas: cappedTip,
+      maxFeePerGas: cappedFee,
+    });
+  };
+  return provider;
+}
+
 async function main(): Promise<void> {
   const cfg = loadConfig();
   const slot = parseAgentId(cfg.agentId);
   const displayName = displayNameFor(cfg.agentId);
   const log = createLogger({ agent_id: cfg.agentId, role: slot.role, display_name: displayName });
 
+  // STARTUP_DELAY_MS staggers boot across the packed-fleet machine so 60
+  // simultaneous startups do not blow past the 0G RPC's 50 req/s burst cap.
+  const startupDelayMs = Number.parseInt(process.env.STARTUP_DELAY_MS ?? "0", 10);
+  if (startupDelayMs > 0) {
+    log.info("startup delay", { delay_ms: startupDelayMs });
+    await sleep(startupDelayMs);
+  }
+
   log.info("agent boot", { rpc: cfg.rpcUrl, axl: cfg.axlUrl });
 
-  const provider = new JsonRpcProvider(cfg.rpcUrl);
+  const provider = makeProvider(cfg.rpcUrl);
   const baseWallet = deriveWallet(cfg.masterSeed, cfg.agentId);
   const wallet = new Wallet(baseWallet.privateKey, provider);
   const walletAddress = await wallet.getAddress();

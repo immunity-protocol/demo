@@ -72,12 +72,23 @@ const ROLE_PRIORITY: Record<AgentRole, number> = {
   scenario: 600,
 };
 
-function agentBlock(agentId: string, role: AgentRole, displayName: string): string {
+// Stagger agent startup so 60 simultaneous boots don't blow past the 0G
+// public RPC's 50 req/s burst cap. 500ms × ordinal => the full fleet
+// finishes booting in ~30s after the spoke is up.
+const STARTUP_STAGGER_MS = 500;
+
+function agentBlock(
+  agentId: string,
+  role: AgentRole,
+  displayName: string,
+  ordinal: number,
+): string {
+  const delayMs = ordinal * STARTUP_STAGGER_MS;
   return `
 [program:agent-${agentId}]
 command=node --enable-source-maps /app/dist/agent.js
 directory=/app
-environment=AGENT_ID="${agentId}",AGENT_ROLE="${role}",AGENT_DISPLAY_NAME="${displayName}"
+environment=AGENT_ID="${agentId}",AGENT_ROLE="${role}",AGENT_DISPLAY_NAME="${displayName}",STARTUP_DELAY_MS="${delayMs}"
 priority=${ROLE_PRIORITY[role]}
 autostart=true
 autorestart=true
@@ -94,7 +105,7 @@ stderr_logfile_maxbytes=0
 
 async function main(): Promise<void> {
   const slots = allAgentSlots();
-  const blocks = slots.map((s) => agentBlock(s.agentId, s.role, displayNameFor(s.agentId)));
+  const blocks = slots.map((s, i) => agentBlock(s.agentId, s.role, displayNameFor(s.agentId), i));
   const out = HEADER + blocks.join("");
   await fs.mkdir(path.dirname(OUT), { recursive: true });
   await fs.writeFile(OUT, out);
