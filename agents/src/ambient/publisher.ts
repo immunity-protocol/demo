@@ -49,6 +49,7 @@ export async function runPublisherAmbient(ctx: AmbientContext): Promise<void> {
       verdict: "SUSPICIOUS",
       confidence: pickConfidence(73, 86),
       severity: pickConfidence(60, 82),
+      reasonSummary: reasoning,
     });
     ctx.log.info("publisher minted antibody", {
       imm_seq: result.immSeq,

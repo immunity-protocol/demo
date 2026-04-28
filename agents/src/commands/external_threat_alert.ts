@@ -45,11 +45,17 @@ export async function runExternalThreatAlert(cmd: Command, ctx: AmbientContext):
     source: p.source ?? "unknown",
   });
 
+  const reasonSummary =
+    typeof p.reasoning === "string" && p.reasoning.trim() !== ""
+      ? String(p.reasoning).slice(0, 280)
+      : `External threat alert from ${p.source ?? "unknown source"} reporting ${address} as ${verdict.toLowerCase()}.`;
+
   const result = await ctx.immunity.publish({
     seed: { abType: "ADDRESS", chainId, target: address as `0x${string}` },
     verdict,
     confidence,
     severity,
+    reasonSummary,
   });
 
   return {
