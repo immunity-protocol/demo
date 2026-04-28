@@ -1,11 +1,16 @@
 import type { Immunity } from "@immunity-protocol/sdk";
-import { Contract, type Signer, parseUnits } from "ethers";
+import { Contract, type ContractTransactionResponse, type Signer, parseUnits } from "ethers";
 import type { Logger } from "./log.js";
 
 const MOCK_USDC_ABI = [
   "function balanceOf(address) view returns (uint256)",
   "function mint(address to, uint256 amount)",
 ];
+
+type MockUsdcCallable = {
+  balanceOf: (address: string) => Promise<bigint>;
+  mint: (to: string, amount: bigint) => Promise<ContractTransactionResponse>;
+};
 
 export interface FundingConfig {
   /** Wallet USDC target. Topped up via MockUSDC.mint() on boot. */
@@ -40,10 +45,10 @@ export async function ensureFundedWallet(
   config: FundingConfig,
   log: Logger,
 ): Promise<void> {
-  const usdc = new Contract(config.mockUsdcAddress, MOCK_USDC_ABI, signer);
+  const usdc = new Contract(config.mockUsdcAddress, MOCK_USDC_ABI, signer) as Contract & MockUsdcCallable;
 
   // 1. Wallet top-up.
-  const walletBalance = (await usdc.balanceOf(walletAddress)) as bigint;
+  const walletBalance = await usdc.balanceOf(walletAddress);
   if (walletBalance < config.walletTargetUsdc) {
     const need = config.walletTargetUsdc - walletBalance;
     log.info("minting USDC to wallet", {

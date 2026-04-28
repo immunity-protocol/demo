@@ -13,8 +13,13 @@
  *   MOCK_USDC_ADDRESS     (Galileo MockUSDC)
  */
 import { Immunity, parseUsdc, type AntibodySeed, type PublishInput } from "@immunity-protocol/sdk";
-import { JsonRpcProvider, Wallet, Contract, parseUnits } from "ethers";
+import { JsonRpcProvider, Wallet, Contract, type ContractTransactionResponse, parseUnits } from "ethers";
 import { promises as fs } from "node:fs";
+
+type MockUsdcCallable = {
+  balanceOf: (address: string) => Promise<bigint>;
+  mint: (to: string, amount: bigint) => Promise<ContractTransactionResponse>;
+};
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -84,8 +89,8 @@ function requireEnv(key: string): string {
 }
 
 async function topUpDeployer(immunity: Immunity, signer: Wallet, walletAddress: string, mockUsdc: string): Promise<void> {
-  const usdc = new Contract(mockUsdc, MOCK_USDC_ABI, signer);
-  const balance = (await usdc.balanceOf(walletAddress)) as bigint;
+  const usdc = new Contract(mockUsdc, MOCK_USDC_ABI, signer) as Contract & MockUsdcCallable;
+  const balance = await usdc.balanceOf(walletAddress);
   const target = parseUnits("100", 6); // 100 USDC headroom for stakes
   if (balance < target) {
     const need = target - balance;
