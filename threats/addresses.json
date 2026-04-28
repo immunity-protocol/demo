@@ -84,7 +84,7 @@
     "evidence_url": null
   },
   {
-    "seed": { "abType": "ADDRESS", "chainId": 16602, "target": "0xbadc0debadc0debadc0debadc0debadc0debadc0d" },
+    "seed": { "abType": "ADDRESS", "chainId": 16602, "target": "0xbadc0debadc0debadc0debadc0debadc0deb1aa5" },
     "verdict": "MALICIOUS", "confidence": 87, "severity": 79, "expires_at": 1798755200,
     "reasoning": "Demo honeypot ERC20 - sells revert. Synthesized for the demo so wolf attacks land on a known antibody.",
     "seed_source": "demo_fabrication",

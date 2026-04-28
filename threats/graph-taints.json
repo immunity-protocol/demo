@@ -51,7 +51,7 @@
       "abType": "GRAPH",
       "chainId": 16602,
       "taintedAddresses": [
-        "0xbadc0debadc0debadc0debadc0debadc0debadc0d",
+        "0xbadc0debadc0debadc0debadc0debadc0deb1aa5",
         "0xdeadc0dedeadc0dedeadc0dedeadc0dedeadc0de",
         "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
       ],

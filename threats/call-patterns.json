@@ -68,7 +68,7 @@
     "seed": {
       "abType": "CALL_PATTERN",
       "chainId": 16602,
-      "target": "0xbadc0debadc0debadc0debadc0debadc0debadc0d",
+      "target": "0xbadc0debadc0debadc0debadc0debadc0deb1aa5",
       "selector": "0x23b872dd",
       "argsTemplate": "0x"
     },
