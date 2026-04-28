@@ -1,0 +1,21 @@
+{
+  "name": "immunity-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo orchestration for Immunity: 60-agent fleet, command queue, playground scenarios.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p agents/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
+    "build:agents": "tsc -p agents/tsconfig.json",
+    "compose:generate": "tsx scripts/generate-compose.ts",
+    "threats:publish": "tsx scripts/publish-threats.ts",
+    "fund:og": "tsx scripts/fund-agents-og.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "yaml": "^2.5.0"
+  }
+}
