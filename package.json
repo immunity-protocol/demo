@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit -p agents/tsconfig.json && tsc --noEmit -p scripts/tsconfig.json",
     "build:agents": "tsc -p agents/tsconfig.json",
     "compose:generate": "tsx scripts/generate-compose.ts",
-    "threats:publish": "tsx scripts/publish-threats.ts",
-    "fund:og": "tsx scripts/fund-agents-og.ts"
+    "threats:publish": "tsx --env-file=.env scripts/publish-threats.ts",
+    "fund:og": "tsx --env-file=.env scripts/fund-agents-og.ts"
   },
   "devDependencies": {
     "@immunity-protocol/sdk": "^0.2.0",
