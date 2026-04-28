@@ -1,0 +1,93 @@
+[
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0x098b716b8aaf21512996dc57eb0615e2383e2f96",
+      "selector": "0x095ea7b3",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 91, "severity": 88, "expires_at": 0,
+    "reasoning": "Any approve() call targeting the Atomic Wallet drainer contract is a drain attempt.",
+    "seed_source": "elliptic_atomic_2023",
+    "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0x9f2c3ad13e0f12c0eb28ddec6eab1d5b4ecc3fcd",
+      "selector": "0x095ea7b3",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
+    "reasoning": "approve() to Pink Drainer family contract — selector-only match.",
+    "seed_source": "scamsniffer_warnlist",
+    "evidence_url": "https://github.com/scamsniffer/scam-database"
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0x0000d38a234679f88dd6343d34e26dcb50c30000",
+      "selector": "0xa22cb465",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 89, "severity": 86, "expires_at": 0,
+    "reasoning": "setApprovalForAll(operator, true) to Inferno Drainer — common NFT-drain primitive.",
+    "seed_source": "slowmist_inferno_q4_2024",
+    "evidence_url": "https://slowmist.medium.com/"
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0xdeadc0dedeadc0dedeadc0dedeadc0dedeadc0de",
+      "selector": "0x095ea7b3",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 83, "severity": 78, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: approve to phishing-kit drainer. Synthesized for the demo.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0xfeedfeedfeedfeedfeedfeedfeedfeedfeedfeed",
+      "selector": "0xa22cb465",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 81, "severity": 77, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: setApprovalForAll to drainer. Synthesized for the demo.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0xbadc0debadc0debadc0debadc0debadc0debadc0d",
+      "selector": "0x23b872dd",
+      "argsTemplate": "0x"
+    },
+    "verdict": "SUSPICIOUS", "confidence": 74, "severity": 69, "expires_at": 1798755200,
+    "reasoning": "Demo fixture: transferFrom called on honeypot ERC20 — sells revert post-buy.",
+    "seed_source": "demo_fabrication",
+    "evidence_url": null
+  },
+  {
+    "seed": {
+      "abType": "CALL_PATTERN",
+      "chainId": 16602,
+      "target": "0x098b716b8aaf21512996dc57eb0615e2383e2f96",
+      "selector": "0xd505accf",
+      "argsTemplate": "0x"
+    },
+    "verdict": "MALICIOUS", "confidence": 92, "severity": 91, "expires_at": 0,
+    "reasoning": "permit() signature submission to Atomic Wallet drainer — gasless approval-to-drain primitive.",
+    "seed_source": "elliptic_atomic_2023",
+    "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
+  }
+]
