@@ -58,6 +58,8 @@ interface PublishedRecord {
   imm_seq: number;
   keccak_id: string;
   tx_hash: string;
+  evidence_cid: string;
+  context_hash: string | null;
   published_at: string;
 }
 
@@ -145,11 +147,30 @@ async function main(): Promise<void> {
         continue;
       }
       const entry = entries[i]!;
+      const reasonSummary = (entry.reasoning ?? "").trim();
+      if (reasonSummary === "") {
+        console.error(`✗ ${file}#${i} skipped: missing reasoning (would publish empty envelope)`);
+        await immunity.stop();
+        process.exit(1);
+      }
+      // Full unredacted evidence bundle. The SDK encrypts this with a
+      // fresh AES key and uploads the ciphertext to 0G storage; the Merkle
+      // root lands on-chain as contextHash. v1: TEE does not decrypt these
+      // (audit-trail only). v2: key will be wrapped to TEE attested pubkey.
+      const evidence = new TextEncoder().encode(JSON.stringify({
+        schema: "immunity/threat-evidence/v1",
+        seed_source: entry.seed_source ?? null,
+        evidence_url: entry.evidence_url ?? null,
+        full_reasoning: entry.reasoning,
+        published_at: new Date().toISOString(),
+      }));
       const input: PublishInput = {
         seed: entry.seed,
         verdict: entry.verdict,
         confidence: entry.confidence,
         severity: entry.severity,
+        reasonSummary,
+        evidence,
       };
       if (entry.expires_at !== undefined && entry.expires_at !== 0 && entry.expires_at !== "0") {
         input.expiresAt = BigInt(entry.expires_at);
@@ -162,12 +183,18 @@ async function main(): Promise<void> {
           imm_seq: result.immSeq,
           keccak_id: result.keccakId,
           tx_hash: result.txHash,
+          evidence_cid: result.evidenceCid,
+          context_hash: result.contextHash ?? null,
           published_at: new Date().toISOString(),
         };
         state.published.push(record);
         await saveState(state);
         publishedThisRun++;
-        console.log(`✓ ${file}#${i} → IMM-seq ${result.immSeq} (${result.txHash})`);
+        console.log(
+          `✓ ${file}#${i} → IMM-seq ${result.immSeq} ` +
+          `evidence=${result.evidenceCid.slice(0, 10)}… ` +
+          `context=${(result.contextHash ?? "").slice(0, 10)}… (${result.txHash})`
+        );
       } catch (err) {
         console.error(`✗ ${file}#${i} failed: ${String(err)}`);
         // Stop on first failure so the operator can investigate. State is
