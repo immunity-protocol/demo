@@ -5,5 +5,10 @@
     "module": "ES2022",
     "moduleResolution": "bundler"
   },
-  "include": ["./*.ts", "../agents/src/wallets.ts", "../agents/src/display_names.ts"]
+  "include": [
+    "./*.ts",
+    "../agents/src/wallets.ts",
+    "../agents/src/display_names.ts",
+    "../agents/src/data/incidents.ts"
+  ]
 }
