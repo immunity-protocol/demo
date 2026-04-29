@@ -19,7 +19,18 @@
 set -euo pipefail
 
 NAME="immunity-axl-spoke-host"
-IMAGE="ghcr.io/immunity-protocol/axl-hub:latest"
+# Image preference (override with AXL_IMAGE):
+#   1. AXL_IMAGE env var (explicit override)
+#   2. local/axl-hub:test (locally built from immunity-axl-hub repo)
+#   3. ghcr.io/immunity-protocol/axl-hub:latest (private; needs `docker login ghcr.io`)
+IMAGE="${AXL_IMAGE:-}"
+if [ -z "$IMAGE" ]; then
+  if docker image inspect local/axl-hub:test >/dev/null 2>&1; then
+    IMAGE="local/axl-hub:test"
+  else
+    IMAGE="ghcr.io/immunity-protocol/axl-hub:latest"
+  fi
+fi
 VOLUME="immunity-axl-data-host"
 
 cmd="${1:-up}"
