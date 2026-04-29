@@ -63,6 +63,13 @@ export async function drainInbox(ctx: AmbientContext, axl: AxlClient): Promise<v
       };
       if (result.allowed) {
         ctx.log.info("social_dm allowed (no marker hit, novel)", { ...tag, source: result.source });
+        ctx.recordActivity({
+          actionType: "social_dm_in",
+          actionSummary: `DM from ${fromName ?? "unknown"} (${payload.family_id ?? "?"})`,
+          status: result.novel ? "novel" : "allow",
+          target: fromName,
+          family: payload.family_id ?? null,
+        });
       } else {
         ctx.log.info("social_dm blocked", {
           ...tag,
@@ -70,9 +77,24 @@ export async function drainInbox(ctx: AmbientContext, axl: AxlClient): Promise<v
           antibody: result.antibodies[0]?.immId,
           source: result.source,
         });
+        ctx.recordActivity({
+          actionType: "social_dm_in",
+          actionSummary: `DM from ${fromName ?? "unknown"} blocked: ${result.reason}`,
+          status: "block",
+          antibodyImmId: result.antibodies[0]?.immId ?? null,
+          target: fromName,
+          family: payload.family_id ?? null,
+        });
       }
     } catch (err) {
       ctx.log.warn("social_dm check error", { err: String(err) });
+      ctx.recordActivity({
+        actionType: "social_dm_in",
+        actionSummary: `DM check error: ${String(err).slice(0, 120)}`,
+        status: "error",
+        target: fromName,
+        family: payload.family_id ?? null,
+      });
     }
   }
 }

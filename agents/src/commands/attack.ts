@@ -59,6 +59,13 @@ export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<Comm
       variant: result.variant?.id,
       target: result.target?.agentId,
     });
+    ctx.recordActivity({
+      actionType: "social_dm_out",
+      actionSummary: `(operator) DM → ${result.target?.agentId ?? "?"} (${result.family?.id ?? "?"})`,
+      status: result.status === "sent" ? "info" : "error",
+      target: result.target?.agentId ?? null,
+      family: result.family?.id ?? null,
+    });
     return {
       status: result.status === "sent" ? "completed" : "failed",
       detail: {
@@ -83,6 +90,13 @@ export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<Comm
       family: result.family?.id,
       variant: result.variant?.id,
       feed_id: result.feedId,
+    });
+    ctx.recordActivity({
+      actionType: "feed_post",
+      actionSummary: `(operator) posted ${result.source ?? "?"}: ${result.family?.id ?? "?"}`,
+      status: result.status === "posted" ? "info" : "error",
+      family: result.family?.id ?? null,
+      details: { feed_id: result.feedId ?? null, url: result.url ?? null },
     });
     return {
       status: result.status === "posted" ? "completed" : "failed",
@@ -116,6 +130,14 @@ export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<Comm
     usdc: amountUsd,
     decision: result.decision,
     source: result.source,
+  });
+  ctx.recordActivity({
+    actionType: "attack",
+    actionSummary: `(operator) ${method} $${amountUsd} → ${target.slice(0, 6)}…${target.slice(-4)}: ${result.allowed ? "ALLOWED" : "blocked"}`,
+    status: result.allowed ? (result.novel ? "novel" : "allow") : "block",
+    antibodyImmId: result.antibodies[0]?.immId ?? null,
+    target,
+    details: { method, decision: result.decision, source: result.source, reason: result.reason },
   });
 
   return {

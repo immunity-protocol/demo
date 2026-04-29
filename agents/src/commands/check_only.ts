@@ -58,6 +58,14 @@ export async function runCheckOnly(cmd: Command, ctx: AmbientContext): Promise<C
     source: result.source,
     novel: result.novel,
   });
+  ctx.recordActivity({
+    actionType: "check_only",
+    actionSummary: `(playground) check $${amountUsd} → ${target.slice(0, 6)}…${target.slice(-4)}: ${result.allowed ? "ALLOWED" : `blocked: ${result.reason}`}`,
+    status: result.allowed ? (result.novel ? "novel" : "allow") : "block",
+    antibodyImmId: result.antibodies[0]?.immId ?? null,
+    target,
+    details: { source: result.source, value_usd: amountUsd },
+  });
 
   return {
     status: "completed",

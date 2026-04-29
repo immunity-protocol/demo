@@ -55,6 +55,14 @@ export async function runManipulate(cmd: Command, ctx: AmbientContext): Promise<
     decision: result.decision,
     source: result.source,
   });
+  ctx.recordActivity({
+    actionType: "manipulate",
+    actionSummary: `(playground) manipulate ${p.target ?? "?"} via ${p.method ?? "free"}: ${result.allowed ? "ALLOWED" : `blocked: ${result.reason}`}`,
+    status: result.allowed ? (result.novel ? "novel" : "allow") : "block",
+    antibodyImmId: result.antibodies[0]?.immId ?? null,
+    target: p.target ?? null,
+    details: { method: p.method ?? "free", source: result.source },
+  });
 
   return {
     status: "completed",

@@ -58,16 +58,23 @@ export async function runTraderAmbient(ctx: AmbientContext): Promise<void> {
 
   let payload: { description: string; tx: ReturnType<typeof buildErc20Transfer> | ReturnType<typeof buildSwap> | ReturnType<typeof buildErc20Approve> };
 
+  let actionType: "swap" | "transfer" | "approve";
+  let target: string | null = null;
   if (roll < 0.70) {
     const amount = lognormalUsdcAmount(500, 50_000);
     payload = { description: `swap ${formatUsdc(amount)} USDC via DEX router`, tx: buildSwap(env, amount) };
+    actionType = "swap";
   } else if (roll < 0.90) {
     const amount = lognormalUsdcAmount(100, 10_000);
     const to = pickCounterparty();
+    target = to;
     payload = { description: `transfer ${formatUsdc(amount)} USDC → ${shortAddr(to)}`, tx: buildErc20Transfer(env, to, amount) };
+    actionType = "transfer";
   } else if (roll < 0.95) {
     const spender = Math.random() < ORGANIC_BAD_RATE ? pickKnownBad().address : pickRouter();
+    target = spender;
     payload = { description: `approve(MAX) → ${shortAddr(spender)}`, tx: buildErc20Approve(env, spender) };
+    actionType = "approve";
   } else {
     ctx.log.debug("trader idle tick");
     return;
@@ -85,6 +92,13 @@ export async function runTraderAmbient(ctx: AmbientContext): Promise<void> {
       : {};
     if (result.allowed) {
       ctx.log.info("ambient allow", { action: payload.description, source: result.source, novel: result.novel, ...incidentTag });
+      ctx.recordActivity({
+        actionType,
+        actionSummary: payload.description,
+        status: result.novel ? "novel" : "allow",
+        target,
+        family: incident?.family.id ?? null,
+      });
     } else {
       ctx.log.info("ambient block", {
         action: payload.description,
@@ -93,9 +107,24 @@ export async function runTraderAmbient(ctx: AmbientContext): Promise<void> {
         source: result.source,
         ...incidentTag,
       });
+      ctx.recordActivity({
+        actionType,
+        actionSummary: `${payload.description} — blocked: ${result.reason}`,
+        status: "block",
+        antibodyImmId: result.antibodies[0]?.immId ?? null,
+        target,
+        family: incident?.family.id ?? null,
+      });
     }
   } catch (err) {
     ctx.log.warn("ambient check error", { action: payload.description, err: String(err) });
+    ctx.recordActivity({
+      actionType,
+      actionSummary: `${payload.description} — error: ${String(err).slice(0, 120)}`,
+      status: "error",
+      target,
+      family: incident?.family.id ?? null,
+    });
   }
 }
 
@@ -126,8 +155,15 @@ async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
       source: row.source,
       posted_by: row.postedByAgentId ?? "(seeded)",
     };
+    const summary = `scanned ${row.source} post (${row.url.slice(0, 60)})`;
     if (result.allowed) {
       ctx.log.info("social_feed scan: allowed", { ...tag, source: result.source });
+      ctx.recordActivity({
+        actionType: "feed_scan",
+        actionSummary: summary,
+        status: result.novel ? "novel" : "allow",
+        target: row.postedByAgentId,
+      });
     } else {
       ctx.log.info("social_feed scan: blocked", {
         ...tag,
@@ -135,9 +171,21 @@ async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
         antibody: result.antibodies[0]?.immId,
         source: result.source,
       });
+      ctx.recordActivity({
+        actionType: "feed_scan",
+        actionSummary: `${summary} — blocked: ${result.reason}`,
+        status: "block",
+        antibodyImmId: result.antibodies[0]?.immId ?? null,
+        target: row.postedByAgentId,
+      });
     }
   } catch (err) {
     ctx.log.warn("social_feed scan: check failed", { err: String(err) });
+    ctx.recordActivity({
+      actionType: "feed_scan",
+      actionSummary: `feed_scan error: ${String(err).slice(0, 120)}`,
+      status: "error",
+    });
   }
   return true;
 }

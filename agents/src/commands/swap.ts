@@ -27,6 +27,13 @@ export async function runSwap(cmd: Command, ctx: AmbientContext): Promise<Comman
   });
 
   ctx.log.info("operator swap run", { usdc: amountUsd, decision: result.decision, source: result.source });
+  ctx.recordActivity({
+    actionType: "swap",
+    actionSummary: `(operator) swap $${amountUsd}: ${result.allowed ? "ALLOWED" : `blocked: ${result.reason}`}`,
+    status: result.allowed ? (result.novel ? "novel" : "allow") : "block",
+    antibodyImmId: result.antibodies[0]?.immId ?? null,
+    details: { source: result.source, value_usd: amountUsd },
+  });
 
   return {
     status: "completed",

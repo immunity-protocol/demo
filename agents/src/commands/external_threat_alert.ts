@@ -57,11 +57,21 @@ export async function runExternalThreatAlert(cmd: Command, ctx: AmbientContext):
     severity,
     reasonSummary,
   });
+  const immId = `IMM-${new Date().getUTCFullYear()}-${String(result.immSeq).padStart(4, "0")}`;
+  ctx.recordActivity({
+    actionType: "publish_mint",
+    actionSummary: `(${p.source ?? "external"}) minted ADDRESS ${immId} target=${address}`,
+    status: "info",
+    antibodyImmId: immId,
+    txHash: result.txHash,
+    target: address,
+    details: { verdict, severity, confidence, source: p.source ?? null },
+  });
 
   return {
     status: "completed",
     detail: {
-      imm_id:     `IMM-${new Date().getUTCFullYear()}-${String(result.immSeq).padStart(4, "0")}`,
+      imm_id:     immId,
       imm_seq:    result.immSeq,
       keccak_id:  result.keccakId,
       tx_hash:    result.txHash,

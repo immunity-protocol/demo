@@ -9,6 +9,7 @@ import {
   connectPool,
   dequeueCommand,
   getFleetState,
+  insertAgentActivity,
   markCommandComplete,
   upsertHeartbeat,
 } from "./db.js";
@@ -200,7 +201,18 @@ async function main(): Promise<void> {
     }).catch((err) => log.error("heartbeat failed", { err: String(err) }));
   }, HEARTBEAT_INTERVAL_MS);
 
-  const ctx: AmbientContext = { slot, displayName, walletAddress, immunity, pool, log };
+  // Bind a per-agent activity recorder over the shared pool. Fire-and-forget:
+  // any insert error is logged and swallowed so agent ticks never block on DB.
+  const recordActivity = (rec: import("./context.js").ActivityRecord): void => {
+    insertAgentActivity(pool, {
+      agentId: cfg.agentId,
+      role: slot.role,
+      displayName,
+      ...rec,
+    }).catch((err) => log.warn("recordActivity failed; dropping row", { err: String(err).slice(0, 200) }));
+  };
+
+  const ctx: AmbientContext = { slot, displayName, walletAddress, immunity, pool, log, recordActivity };
 
   let stopping = false;
   const shutdown = async (signal: string): Promise<void> => {

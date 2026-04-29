@@ -42,6 +42,13 @@ export async function runInjectPrompt(cmd: Command, ctx: AmbientContext): Promis
     novel: result.novel,
     antibody: result.antibodies[0]?.immId,
   });
+  ctx.recordActivity({
+    actionType: "inject_prompt",
+    actionSummary: `(playground) prompt-inject: ${result.allowed ? "ALLOWED" : `blocked: ${result.reason}`}`,
+    status: result.allowed ? (result.novel ? "novel" : "allow") : "block",
+    antibodyImmId: result.antibodies[0]?.immId ?? null,
+    details: { source: result.source, payload_excerpt: payload.slice(0, 200) },
+  });
 
   return {
     status: "completed",

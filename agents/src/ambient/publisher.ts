@@ -61,11 +61,22 @@ export async function runPublisherAmbient(ctx: AmbientContext): Promise<void> {
   }
 
   ctx.log.info("publisher scanning", { item_id: item.id, source: item.source });
+  ctx.recordActivity({
+    actionType: "publish_scan",
+    actionSummary: `scanning ${item.source}: ${item.id}`,
+    status: "info",
+    details: { item_id: item.id, source: item.source, url: item.url },
+  });
   let result: ClassificationResult | null;
   try {
     result = await classifyFeedItem(item);
   } catch (err) {
     ctx.log.warn("publisher classify error", { item_id: item.id, err: String(err) });
+    ctx.recordActivity({
+      actionType: "publish_scan",
+      actionSummary: `classify error on ${item.id}: ${String(err).slice(0, 120)}`,
+      status: "error",
+    });
     return;
   }
   if (!result) {
@@ -74,6 +85,11 @@ export async function runPublisherAmbient(ctx: AmbientContext): Promise<void> {
   }
   if (!result.is_threat) {
     ctx.log.info("publisher: scanned, benign", { item_id: item.id });
+    ctx.recordActivity({
+      actionType: "publish_scan",
+      actionSummary: `${item.id} classified benign`,
+      status: "info",
+    });
     return;
   }
 
@@ -125,6 +141,14 @@ async function publishFromClassification(
         target,
         item_id: item.id,
       });
+      ctx.recordActivity({
+        actionType: "publish_mint",
+        actionSummary: `minted ADDRESS IMM-${pub.immSeq.toString().padStart(4, "0")} target=${target}`,
+        status: "info",
+        antibodyImmId: `IMM-${new Date().getUTCFullYear()}-${String(pub.immSeq).padStart(4, "0")}`,
+        txHash: pub.txHash,
+        target,
+      });
     } else if (result.ab_type === "SEMANTIC") {
       const marker = result.marker;
       const flavor = result.flavor;
@@ -161,6 +185,14 @@ async function publishFromClassification(
         flavor,
         marker: marker.slice(0, 60),
         item_id: item.id,
+      });
+      ctx.recordActivity({
+        actionType: "publish_mint",
+        actionSummary: `minted SEMANTIC IMM-${pub.immSeq.toString().padStart(4, "0")} flavor=${flavor} marker="${marker.slice(0, 50)}"`,
+        status: "info",
+        antibodyImmId: `IMM-${new Date().getUTCFullYear()}-${String(pub.immSeq).padStart(4, "0")}`,
+        txHash: pub.txHash,
+        details: { flavor, marker: marker.slice(0, 100) },
       });
     }
   } catch (err) {

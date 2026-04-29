@@ -45,10 +45,24 @@ export async function runWolfAmbient(ctx: AmbientContext): Promise<void> {
         variant: result.variant?.id,
         surface: result.variant?.surface,
       });
+      ctx.recordActivity({
+        actionType: "social_dm_out",
+        actionSummary: `DM → ${result.target?.agentId} (${result.family?.id})`,
+        status: "info",
+        target: result.target?.agentId ?? null,
+        family: result.family?.id ?? null,
+      });
     } else if (result.status === "no-target") {
       ctx.log.debug("wolf: no online traders for DM");
     } else if (result.status === "send-failed") {
       ctx.log.warn("wolf: AXL send failed", { err: result.error });
+      ctx.recordActivity({
+        actionType: "social_dm_out",
+        actionSummary: `DM failed: ${(result.error ?? "").slice(0, 120)}`,
+        status: "error",
+        target: result.target?.agentId ?? null,
+        family: result.family?.id ?? null,
+      });
     } else {
       ctx.log.debug("wolf: no DM-shaped incident available");
     }
@@ -64,8 +78,21 @@ export async function runWolfAmbient(ctx: AmbientContext): Promise<void> {
       variant: result.variant?.id,
       surface: result.variant?.surface,
     });
+    ctx.recordActivity({
+      actionType: "feed_post",
+      actionSummary: `posted ${result.source} item: ${result.family?.id ?? "?"}`,
+      status: "info",
+      family: result.family?.id ?? null,
+      details: { feed_id: result.feedId, url: result.url },
+    });
   } else if (result.status === "post-failed") {
     ctx.log.warn("wolf: social_feed insert failed", { err: result.error });
+    ctx.recordActivity({
+      actionType: "feed_post",
+      actionSummary: `feed_post failed: ${(result.error ?? "").slice(0, 120)}`,
+      status: "error",
+      family: result.family?.id ?? null,
+    });
   } else {
     ctx.log.debug("wolf: no source-shaped incident available");
   }

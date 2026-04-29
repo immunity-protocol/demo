@@ -230,6 +230,53 @@ export async function insertSocialFeedPost(
  * transaction so concurrent ticks don't double-evaluate the same post.
  * Returns null when there's nothing fresh to read.
  */
+export interface ActivityRow {
+  agentId: string;
+  role: string;
+  displayName: string;
+  actionType: string;
+  actionSummary: string;
+  status: "allow" | "block" | "novel" | "error" | "info";
+  antibodyImmId?: string | null;
+  txHash?: string | null;
+  target?: string | null;
+  family?: string | null;
+  details?: Record<string, unknown>;
+}
+
+/**
+ * Insert one row into demo.agent_activity. Used by every ambient/command/inbox
+ * call site to surface what the agent just did on the dashboard's live feed.
+ *
+ * Errors are logged and swallowed by the caller wrapper (`bindRecordActivity`).
+ * This keeps the demo responsive — a slow or unreachable Postgres should not
+ * block an agent's tick or crash the process.
+ */
+export async function insertAgentActivity(
+  client: Pool | PoolClient,
+  row: ActivityRow,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO demo.agent_activity
+       (agent_id, role, display_name, action_type, action_summary, status,
+        antibody_imm_id, tx_hash, target, family, details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+    [
+      row.agentId,
+      row.role,
+      row.displayName,
+      row.actionType,
+      row.actionSummary,
+      row.status,
+      row.antibodyImmId ?? null,
+      row.txHash ?? null,
+      row.target ?? null,
+      row.family ?? null,
+      row.details ? JSON.stringify(row.details) : null,
+    ],
+  );
+}
+
 export async function pickUnreadSocialPost(
   client: Pool | PoolClient,
   agentId: string,
