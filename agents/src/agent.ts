@@ -138,6 +138,7 @@ async function main(): Promise<void> {
     network: "testnet",
     axlUrl: cfg.axlUrl,
     novelThreatPolicy: "verify",
+    semanticAutoMint: true,
   });
   await withBootRetry("immunity.start", log, () => immunity.start());
 
