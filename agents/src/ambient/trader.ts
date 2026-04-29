@@ -12,6 +12,7 @@ import {
   type BuildEnv,
 } from "../tx_builder.js";
 import { pickKnownBad } from "../threat_targets.js";
+import { displayNameFor } from "../display_names.js";
 
 /**
  * Treasury operator behaviour. Weighted random pick per tick:
@@ -150,12 +151,21 @@ async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
   };
   try {
     const result = await ctx.immunity.check(null, context);
+    // Resolve the wolf's display name when the post was authored by another
+    // agent in the fleet. Seeded baseline rows (postedByAgentId === null)
+    // get a "(seeded)" label so the feed event is still self-explanatory.
+    // Putting the author into the activity summary makes the indirect-
+    // injection story land on the dashboard at a glance: "trader-X read a
+    // post by wolf-Y → SDK matched the embedded marker → block".
+    const author = row.postedByAgentId
+      ? `${displayNameFor(row.postedByAgentId)} (${row.postedByAgentId})`
+      : "(seeded baseline)";
     const tag = {
       feed_id: row.id,
       source: row.source,
       posted_by: row.postedByAgentId ?? "(seeded)",
     };
-    const summary = `scanned ${row.source} post (${row.url.slice(0, 60)})`;
+    const summary = `scraped ${row.source} post by ${author} → ${row.url.slice(0, 60)}`;
     if (result.allowed) {
       ctx.log.info("social_feed scan: allowed", { ...tag, source: result.source });
       ctx.recordActivity({
@@ -173,7 +183,7 @@ async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
       });
       ctx.recordActivity({
         actionType: "feed_scan",
-        actionSummary: `${summary} — blocked: ${result.reason}`,
+        actionSummary: `${summary} — BLOCKED: ${result.reason}`,
         status: "block",
         antibodyImmId: result.antibodies[0]?.immId ?? null,
         target: row.postedByAgentId,

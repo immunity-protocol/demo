@@ -47,7 +47,7 @@ export async function runWolfAmbient(ctx: AmbientContext): Promise<void> {
       });
       ctx.recordActivity({
         actionType: "social_dm_out",
-        actionSummary: `DM → ${result.target?.agentId} (${result.family?.id})`,
+        actionSummary: `social-engineering DM → ${result.target?.displayName ?? result.target?.agentId} (family=${result.family?.id ?? "?"}, surface=${result.variant?.surface ?? "?"})`,
         status: "info",
         target: result.target?.agentId ?? null,
         family: result.family?.id ?? null,
@@ -80,7 +80,7 @@ export async function runWolfAmbient(ctx: AmbientContext): Promise<void> {
     });
     ctx.recordActivity({
       actionType: "feed_post",
-      actionSummary: `posted ${result.source} item: ${result.family?.id ?? "?"}`,
+      actionSummary: `planted bait on ${result.source} (${result.family?.id ?? "?"}) → ${(result.url ?? "").slice(0, 60)} — waiting for traders to scrape`,
       status: "info",
       family: result.family?.id ?? null,
       details: { feed_id: result.feedId, url: result.url },
