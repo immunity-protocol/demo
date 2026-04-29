@@ -12,7 +12,8 @@
     "supervisor:generate": "tsx scripts/generate-supervisor-conf.ts",
     "threats:publish": "tsx --env-file=.env scripts/publish-threats.ts",
     "fund:og": "tsx --env-file=.env scripts/fund-agents-og.ts",
-    "test:incidents": "tsx scripts/test-incidents.ts"
+    "test:incidents": "tsx scripts/test-incidents.ts",
+    "postinstall": "node scripts/patch-0g-broker.mjs"
   },
   "devDependencies": {
     "@immunity-protocol/sdk": "^0.5.0",

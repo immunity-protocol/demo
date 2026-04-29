@@ -1,6 +1,7 @@
 import type { CheckContext } from "@immunity-protocol/sdk";
 import type { AmbientContext } from "../context.js";
 import { pickRandomIncident } from "../data/incidents.js";
+import { pickUnreadSocialPost } from "../db.js";
 import {
   buildErc20Approve,
   buildErc20Transfer,
@@ -32,7 +33,26 @@ import { pickKnownBad } from "../threat_targets.js";
 const ORGANIC_BAD_RATE = 0.05;
 const INCIDENT_RATE = 0.10;
 
+/**
+ * 20% of trader ticks: instead of running a tx, the trader reads one
+ * unread row from demo.social_feed (mock external content posted by
+ * wolves or seeded benign baseline) and runs immunity.check() with the
+ * content carried as ctx.sources.extractedText. The SemanticMatcher
+ * substring-matches against published markers; matches block the
+ * "ingestion" the way they would if the agent had scraped the page.
+ *
+ * If there's nothing unread, the tick falls through to normal tx ambient.
+ */
+const SOCIAL_FEED_SCAN_RATE = 0.20;
+
 export async function runTraderAmbient(ctx: AmbientContext): Promise<void> {
+  if (Math.random() < SOCIAL_FEED_SCAN_RATE) {
+    const ran = await maybeScanSocialFeed(ctx);
+    if (ran) return;
+    // Nothing unread; fall through to normal tx ambient so the tick
+    // doesn't degrade into a no-op when the social feed is quiet.
+  }
+
   const env = txEnv();
   const roll = Math.random();
 
@@ -84,6 +104,42 @@ function pickCounterparty(): string {
     return pickKnownBad().address;
   }
   return randomAddress();
+}
+
+async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
+  let row: Awaited<ReturnType<typeof pickUnreadSocialPost>>;
+  try {
+    row = await pickUnreadSocialPost(ctx.pool, ctx.slot.agentId);
+  } catch (err) {
+    ctx.log.warn("social_feed scan: db error", { err: String(err) });
+    return false;
+  }
+  if (!row) return false;
+
+  const context: CheckContext = {
+    sources: [{ url: row.url, extractedText: row.content }],
+  };
+  try {
+    const result = await ctx.immunity.check(null, context);
+    const tag = {
+      feed_id: row.id,
+      source: row.source,
+      posted_by: row.postedByAgentId ?? "(seeded)",
+    };
+    if (result.allowed) {
+      ctx.log.info("social_feed scan: allowed", { ...tag, source: result.source });
+    } else {
+      ctx.log.info("social_feed scan: blocked", {
+        ...tag,
+        reason: result.reason,
+        antibody: result.antibodies[0]?.immId,
+        source: result.source,
+      });
+    }
+  } catch (err) {
+    ctx.log.warn("social_feed scan: check failed", { err: String(err) });
+  }
+  return true;
 }
 
 function txEnv(): BuildEnv {
