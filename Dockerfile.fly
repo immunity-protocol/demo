@@ -54,24 +54,29 @@ RUN apk add --no-cache supervisor openssl ca-certificates
 
 WORKDIR /app
 
-# Axl daemon + spoke config + key bootstrap.
+# Axl daemon + per-agent spoke configs + per-agent keygen.
 COPY --from=axl-build /out/axl-hub /usr/local/bin/axl-hub
 COPY --from=axl-build /AXL_COMMIT /AXL_COMMIT
-COPY infrastructure/axl-spoke.json /etc/axl/spoke.json
-COPY infrastructure/generate-key.sh /usr/local/bin/generate-key.sh
-RUN chmod +x /usr/local/bin/generate-key.sh /usr/local/bin/axl-hub
+# Per-agent spoke configs and the roster the keygen iterates over.
+COPY infrastructure/axl-spokes /etc/axl/spokes
+COPY infrastructure/spoke-roster.txt /etc/axl/spoke-roster.txt
+COPY infrastructure/generate-key.sh /usr/local/bin/generate-keys.sh
+RUN chmod +x /usr/local/bin/generate-keys.sh /usr/local/bin/axl-hub
 
 # Agent JS + dependencies.
 COPY --from=agent-build /app/node_modules /app/node_modules
 COPY --from=agent-build /app/dist /app/dist
 COPY --from=agent-build /app/package.json /app/
 
-# Supervisord config (1 spoke + 60 agents, generated from agents/src/wallets.ts).
+# Supervisord config (60 spokes + 60 agents, generated from agents/src/wallets.ts).
 COPY infrastructure/supervisord.conf /etc/supervisord.conf
 
-ENV NODE_ENV=production LOG_LEVEL=info AXL_CONFIG=/etc/axl/spoke.json KEY_PATH=/data/private.pem
-EXPOSE 9002
+ENV NODE_ENV=production LOG_LEVEL=info
+# AXL spoke API ports: each agent connects to its own spoke at 9002 + ordinal.
+EXPOSE 9002-9061
 
-# /data is the Fly volume mount. generate-key.sh runs once per boot so the
-# spoke's ed25519 identity is created on first run and reused thereafter.
-ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/generate-key.sh && exec supervisord -c /etc/supervisord.conf -n"]
+# /data is the Fly volume mount. generate-keys.sh runs once per boot,
+# reading /etc/axl/spoke-roster.txt and ensuring /data/spoke-<agent_id>.pem
+# exists for each — pre-existing keys are reused so peer ids stay stable
+# across container restarts on the mounted volume.
+ENTRYPOINT ["/bin/sh", "-c", "/usr/local/bin/generate-keys.sh && exec supervisord -c /etc/supervisord.conf -n"]

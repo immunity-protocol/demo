@@ -1,25 +1,44 @@
 #!/bin/sh
-# Idempotent ed25519 keygen for the AXL spoke identity.
+# Idempotent ed25519 keygen for ALL AXL spokes in the packed fleet.
 #
-# AXL refuses to start with a missing PrivateKeyPath, but happily reuses the
-# file if it already exists. Generating once on first boot and persisting on
-# the mounted Fly volume keeps the peer id stable across container restarts.
+# Reads the agent roster from /etc/axl/spoke-roster.txt (one agent_id
+# per line, generated alongside supervisord.conf by
+# scripts/generate-supervisor-conf.ts) and ensures that
+# /data/spoke-<agent_id>.pem exists for each. Pre-existing keys are
+# reused so peer ids stay stable across container restarts on the
+# mounted Fly volume.
 #
-# Losing this file means the spoke gets a new peer id, which breaks every
-# hub that has the old id cached. Treat /data/private.pem as load-bearing.
+# Losing /data/spoke-*.pem means every spoke gets a fresh peer id on
+# next boot, which breaks any hub that has the old ids cached. Treat
+# /data as load-bearing.
 
 set -eu
 
-KEY_PATH="${KEY_PATH:-/data/private.pem}"
-KEY_DIR="$(dirname "$KEY_PATH")"
+ROSTER_PATH="${ROSTER_PATH:-/etc/axl/spoke-roster.txt}"
+KEY_DIR="${KEY_DIR:-/data}"
+
+if [ ! -f "$ROSTER_PATH" ]; then
+  echo "key: roster file missing at $ROSTER_PATH; nothing to generate" >&2
+  exit 1
+fi
 
 mkdir -p "$KEY_DIR"
 
-if [ -f "$KEY_PATH" ]; then
-  echo "key: reusing existing $KEY_PATH"
-  exit 0
-fi
+generated=0
+reused=0
+while IFS= read -r agent_id || [ -n "$agent_id" ]; do
+  # Skip blank lines and comments.
+  case "$agent_id" in ""|"#"*) continue ;; esac
 
-echo "key: generating new ed25519 identity at $KEY_PATH"
-openssl genpkey -algorithm ed25519 -out "$KEY_PATH"
-chmod 600 "$KEY_PATH"
+  key_path="$KEY_DIR/spoke-$agent_id.pem"
+  if [ -f "$key_path" ]; then
+    reused=$((reused + 1))
+    continue
+  fi
+
+  openssl genpkey -algorithm ed25519 -out "$key_path"
+  chmod 600 "$key_path"
+  generated=$((generated + 1))
+done < "$ROSTER_PATH"
+
+echo "key: $generated generated, $reused reused (path=$KEY_DIR)"

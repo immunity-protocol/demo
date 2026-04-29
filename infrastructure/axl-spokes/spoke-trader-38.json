@@ -1,0 +1,10 @@
+{
+  "PrivateKeyPath": "/data/spoke-trader-38.pem",
+  "Peers": [
+    "tls://hub-can.immunity-protocol.com:9001",
+    "tls://hub-usa.immunity-protocol.com:9001"
+  ],
+  "Listen": [],
+  "bridge_addr": "0.0.0.0",
+  "api_port": 9039
+}
