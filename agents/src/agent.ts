@@ -157,6 +157,14 @@ async function main(): Promise<void> {
     // agent silently falls back to trust-cache (no SEMANTIC auto-mint).
     minLedgerOg: 0.1,
     minProviderOg: 0.05,
+    // Cache bootstrap pressure on the 0G testnet's 50 req/s public RPC
+    // is the chief reason agents come up with empty caches in the
+    // packed-fleet config. Sequentializing per-agent fetches drops the
+    // worst-case in-flight from 60 × 4 = 240 to 60 × 1 = 60 — within
+    // shouting distance of the rate cap, and the SDK's per-call retry
+    // (0.6.1+) absorbs the residual throttling. Trades ~30s of slower
+    // boot per agent for a cache that actually populates.
+    bootstrap: { concurrency: 1 },
   });
   await withBootRetry("immunity.start", log, () => immunity.start());
 
