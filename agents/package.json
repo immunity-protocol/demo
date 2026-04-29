@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/agent.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/data/*.json dist/data/",
     "start": "node --enable-source-maps dist/agent.js"
   },
   "dependencies": {

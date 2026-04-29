@@ -1,101 +1,185 @@
+import { createRequire } from "node:module";
 import type { AmbientContext } from "../context.js";
-import { runTraderAmbient } from "./trader.js";
+import {
+  classifyFeedItem,
+  isClaudeConfigured,
+  type ClassificationResult,
+  type FeedItem,
+} from "../llm/claude.js";
+
+// Avoid the ESM `with { type: "json" }` import attribute (not enabled by
+// our `module: "ES2022"` setting). createRequire works in Node 20+ ESM
+// regardless of module mode.
+const requireJson = createRequire(import.meta.url);
+const feedsJson = requireJson("../data/feeds.json") as FeedItem[];
 
 /**
- * Heuristic publisher. Most ticks they look like a trader. Sometimes they
- * notice a pattern in the activity feed and mint a new antibody.
+ * LLM-driven publisher.
  *
- *   70% trader-style activity (organic blocks, occasional novel-context check)
- *   30% scan recent check_events; if a simple heuristic fires, publish
+ * Publishers no longer trade. Each publisher's only job is to scan a curated
+ * mock feed of "external content" (twitter posts, slowmist blog snippets,
+ * github issues, reddit threads — see `agents/src/data/feeds.json`) and
+ * mint an antibody when Claude classifies an item as a threat.
  *
- * The v1 heuristic is intentionally narrow: query check_event for any address
- * that was the target of >=3 approvals in the last 5 minutes from distinct
- * agents. If found, publish an ADDRESS antibody flagging that spender. If
- * not, no-op (the publisher saw nothing worth publishing).
+ * Tick model:
  *
- * The query returns nothing 99% of the time on a healthy fleet - that's by
- * design. The publishers that do mint produce the "organic publication"
- * narrative beat for the dashboard.
+ *  - 5% of ticks: pick a random unseen feed item, send to Claude Haiku 4.5,
+ *    publish an ADDRESS or SEMANTIC antibody on positive classification.
+ *  - 95% of ticks: idle. The fleet ticks every 15-90s, so 5 publishers ×
+ *    ~5% scan rate ≈ 15 LLM calls / hour total — within the cost target
+ *    documented in the SDK auto-mint plan.
+ *
+ * Without `ANTHROPIC_API_KEY` the publisher logs once and idles for the
+ * session. The agent process stays up so the rest of the fleet can run.
+ *
+ * Items the publisher has already classified in this process are tracked in
+ * an in-memory set so repeat picks don't burn API calls. Duplicate publishes
+ * across publishers are caught by the Registry's matcherIndex uniqueness
+ * (returns DuplicateAntibodyError, treated as benign).
  */
-const PUBLISH_RATE = 0.30;
-const HEURISTIC_WINDOW_MIN = 5;
-const HEURISTIC_THRESHOLD  = 3;
 
-interface SuspectRow {
-  spender: string;
-  approvals: number;
-  distinct_agents: number;
-}
+const SCAN_PROBABILITY = 0.05;
+
+const seenThisProcess = new Set<string>();
+const FEED: FeedItem[] = feedsJson;
 
 export async function runPublisherAmbient(ctx: AmbientContext): Promise<void> {
-  if (Math.random() >= PUBLISH_RATE) {
-    return runTraderAmbient(ctx);
+  if (!isClaudeConfigured()) {
+    ctx.log.debug("publisher idle: ANTHROPIC_API_KEY not set");
+    return;
   }
-  const suspects = await findSuspects(ctx);
-  if (suspects.length === 0) {
-    ctx.log.debug("publisher scan: no signals", { window_min: HEURISTIC_WINDOW_MIN });
+  if (Math.random() >= SCAN_PROBABILITY) {
+    ctx.log.debug("publisher idle tick");
     return;
   }
 
-  const suspect = suspects[0]!;
-  const reasoning = `Heuristic: ${suspect.approvals} approvals across ${suspect.distinct_agents} distinct agents in ${HEURISTIC_WINDOW_MIN}min window pointing at ${suspect.spender}`;
+  const item = pickUnseen(FEED);
+  if (!item) {
+    ctx.log.debug("publisher: feed exhausted in this process; resetting set");
+    seenThisProcess.clear();
+    return;
+  }
+
+  ctx.log.info("publisher scanning", { item_id: item.id, source: item.source });
+  let result: ClassificationResult | null;
   try {
-    const result = await ctx.immunity.publish({
-      seed: {
-        abType: "ADDRESS",
-        chainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
-        target: suspect.spender as `0x${string}`,
-      },
-      verdict: "SUSPICIOUS",
-      confidence: pickConfidence(73, 86),
-      severity: pickConfidence(60, 82),
-      reasonSummary: reasoning,
-    });
-    ctx.log.info("publisher minted antibody", {
-      imm_seq: result.immSeq,
-      keccak: result.keccakId,
-      tx: result.txHash,
-      target: suspect.spender,
-      reason: reasoning,
-    });
+    result = await classifyFeedItem(item);
   } catch (err) {
-    ctx.log.warn("publisher publish failed", { err: String(err), target: suspect.spender });
+    ctx.log.warn("publisher classify error", { item_id: item.id, err: String(err) });
+    return;
   }
+  if (!result) {
+    ctx.log.debug("publisher: classifier returned null", { item_id: item.id });
+    return;
+  }
+  if (!result.is_threat) {
+    ctx.log.info("publisher: scanned, benign", { item_id: item.id });
+    return;
+  }
+
+  await publishFromClassification(ctx, item, result);
 }
 
-async function findSuspects(ctx: AmbientContext): Promise<SuspectRow[]> {
-  // Heuristic stub: real implementation would JOIN to a spender column we'd
-  // need to add to event.check_event. For v1 we look at recent block_events
-  // pointing at the same entry - these surface "lots of agents bumping into
-  // the same threat" and any not-yet-mirrored variants are worth re-flagging.
-  const since = new Date(Date.now() - HEURISTIC_WINDOW_MIN * 60_000).toISOString();
-  const res = await ctx.pool.query<{ spender: string; approvals: number; distinct_agents: number }>(
-    `SELECT
-       encode(token_address, 'hex') AS spender,
-       COUNT(*)::int                AS approvals,
-       COUNT(DISTINCT agent_id)::int AS distinct_agents
-     FROM event.check_event
-     WHERE occurred_at >= $1::timestamptz
-       AND token_address IS NOT NULL
-     GROUP BY token_address
-     HAVING COUNT(*) >= $2 AND COUNT(DISTINCT agent_id) >= 2
-     ORDER BY approvals DESC
-     LIMIT 1`,
-    [since, HEURISTIC_THRESHOLD],
+async function publishFromClassification(
+  ctx: AmbientContext,
+  item: FeedItem,
+  result: ClassificationResult,
+): Promise<void> {
+  const reasonSummary = result.reasoning;
+  const evidence = new TextEncoder().encode(
+    JSON.stringify({
+      schema: "immunity/threat-evidence/v1",
+      classifier: "claude-haiku-4-5",
+      feed_item_id: item.id,
+      source: item.source,
+      url: item.url,
+      content_excerpt: item.content.slice(0, 800),
+      classification: result,
+      published_at: new Date().toISOString(),
+    }),
   );
-  return res.rows.map((r) => ({
-    spender: `0x${r.spender}`,
-    approvals: r.approvals,
-    distinct_agents: r.distinct_agents,
-  }));
+
+  try {
+    if (result.ab_type === "ADDRESS") {
+      const target = result.target;
+      if (!target || !/^0x[0-9a-fA-F]{40}$/.test(target)) {
+        ctx.log.warn("publisher: address result has invalid target", { item_id: item.id, target });
+        return;
+      }
+      const pub = await ctx.immunity.publish({
+        seed: {
+          abType: "ADDRESS",
+          chainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
+          target: target as `0x${string}`,
+        },
+        verdict: result.verdict,
+        confidence: result.confidence,
+        severity: result.severity,
+        reasonSummary,
+        evidence,
+      });
+      ctx.log.info("publisher minted ADDRESS antibody", {
+        imm_seq: pub.immSeq,
+        keccak: pub.keccakId,
+        tx: pub.txHash,
+        target,
+        item_id: item.id,
+      });
+    } else if (result.ab_type === "SEMANTIC") {
+      const marker = result.marker;
+      const flavor = result.flavor;
+      if (!marker || !flavor) {
+        ctx.log.warn("publisher: semantic result missing marker or flavor", { item_id: item.id });
+        return;
+      }
+      // Verbatim-presence guard: the SDK does this server-side too on TEE
+      // auto-mint, but for explicit publisher path we re-verify here so a
+      // hallucinated marker never lands on chain.
+      if (!item.content.toLowerCase().includes(marker.toLowerCase())) {
+        ctx.log.warn("publisher: marker not present in content; skipping", {
+          item_id: item.id,
+          marker: marker.slice(0, 60),
+        });
+        return;
+      }
+      const pub = await ctx.immunity.publish({
+        seed: {
+          abType: "SEMANTIC",
+          flavor,
+          pattern: { kind: "marker", value: marker.toLowerCase() },
+        },
+        verdict: result.verdict,
+        confidence: result.confidence,
+        severity: result.severity,
+        reasonSummary,
+        evidence,
+      });
+      ctx.log.info("publisher minted SEMANTIC antibody", {
+        imm_seq: pub.immSeq,
+        keccak: pub.keccakId,
+        tx: pub.txHash,
+        flavor,
+        marker: marker.slice(0, 60),
+        item_id: item.id,
+      });
+    }
+  } catch (err) {
+    const msg = String(err);
+    // Duplicate is the expected outcome when another publisher (or a prior
+    // run) already minted on the same matcher. Drop to debug rather than warn
+    // so the log stays quiet on the happy path.
+    if (msg.includes("DuplicateAntibody") || msg.toLowerCase().includes("alreadyexists")) {
+      ctx.log.debug("publisher: antibody already on chain (duplicate)", { item_id: item.id });
+      return;
+    }
+    ctx.log.warn("publisher publish failed", { item_id: item.id, err: msg });
+  }
 }
 
-function pickConfidence(min: number, max: number): number {
-  // Avoid round numbers - confidence values like 90/85/80 read as suspiciously
-  // human-rounded. Pick from the gaps instead.
-  const candidates: number[] = [];
-  for (let n = min; n <= max; n++) {
-    if (n % 5 !== 0) candidates.push(n);
-  }
-  return candidates[Math.floor(Math.random() * candidates.length)] ?? min;
+function pickUnseen(feed: FeedItem[]): FeedItem | null {
+  const candidates = feed.filter((f) => !seenThisProcess.has(f.id));
+  if (candidates.length === 0) return null;
+  const item = candidates[Math.floor(Math.random() * candidates.length)]!;
+  seenThisProcess.add(item.id);
+  return item;
 }
