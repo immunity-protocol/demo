@@ -1,6 +1,7 @@
 import type { CheckContext, ProposedTx } from "@immunity-protocol/sdk";
 import type { Command, CommandResult } from "../db.js";
 import type { AmbientContext } from "../context.js";
+import { postSocialFeed, sendAxlDm } from "../a2a/attacks.js";
 import {
   buildErc20Approve,
   buildErc20Transfer,
@@ -16,26 +17,89 @@ import { parseUnits } from "ethers";
  *
  * Payload shape (all optional fields filled in with defaults):
  *   {
- *     "method":      "drain"|"approve"|"honeypot-swap"|"prompt-inject",
- *     "target":      "0x..." | "tag:inferno-drainer-1" | undefined (random known-bad),
- *     "amount_usd":  number (default 5000),
- *     "context":     "free text shown in conversation" (optional),
- *     "novel":       true (use a fresh random address - forces TEE evaluation)
+ *     "mode":           "self" | "axl_dm" | "social_feed_post"  (default "self")
+ *     // For mode = "self":
+ *     "method":         "drain"|"approve"|"honeypot-swap"|"prompt-inject",
+ *     "target":         "0x..." | "tag:inferno-drainer-1" | undefined (random known-bad),
+ *     "amount_usd":     number (default 5000),
+ *     "context":        "free text shown in conversation" (optional),
+ *     "novel":          true (use a fresh random address - forces TEE evaluation),
+ *     // For mode = "axl_dm":
+ *     "target_agent":   "trader-7"  (optional; random online trader if absent),
+ *     "family_id":      "recovery-scam"  (optional; random conversation/tool variant),
+ *     // For mode = "social_feed_post":
+ *     "family_id":      "ignore-previous-instructions"  (optional)
  *   }
  *
- * Result detail returned to the playground card:
- *   { decision, source, reason, antibody_imm_id?, antibody_imm_seq?,
- *     check_id?, value_usd, target, method }
+ * Result detail returned to the playground card varies by mode; see the
+ * branch builders below.
  */
 export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<CommandResult> {
   const p = cmd.payload as {
+    mode?: string;
     method?: string;
     target?: string;
+    target_agent?: string;
+    family_id?: string;
     amount_usd?: number | string;
     context?: string;
     novel?: boolean;
   };
 
+  const mode = (p.mode ?? "self") as "self" | "axl_dm" | "social_feed_post";
+
+  if (mode === "axl_dm") {
+    const result = await sendAxlDm(ctx, {
+      ...(p.family_id !== undefined ? { familyId: p.family_id } : {}),
+      ...(p.target_agent !== undefined ? { targetAgentId: p.target_agent } : {}),
+    });
+    ctx.log.info("operator axl_dm attack", {
+      status: result.status,
+      family: result.family?.id,
+      variant: result.variant?.id,
+      target: result.target?.agentId,
+    });
+    return {
+      status: result.status === "sent" ? "completed" : "failed",
+      detail: {
+        mode,
+        delivery_status: result.status,
+        family: result.family?.id ?? null,
+        variant: result.variant?.id ?? null,
+        surface: result.variant?.surface ?? null,
+        target_agent: result.target?.agentId ?? null,
+        target_display: result.target?.displayName ?? null,
+        error: result.error ?? null,
+      },
+    };
+  }
+
+  if (mode === "social_feed_post") {
+    const result = await postSocialFeed(ctx, {
+      ...(p.family_id !== undefined ? { familyId: p.family_id } : {}),
+    });
+    ctx.log.info("operator social_feed_post attack", {
+      status: result.status,
+      family: result.family?.id,
+      variant: result.variant?.id,
+      feed_id: result.feedId,
+    });
+    return {
+      status: result.status === "posted" ? "completed" : "failed",
+      detail: {
+        mode,
+        delivery_status: result.status,
+        family: result.family?.id ?? null,
+        variant: result.variant?.id ?? null,
+        feed_id: result.feedId ?? null,
+        source: result.source ?? null,
+        url: result.url ?? null,
+        error: result.error ?? null,
+      },
+    };
+  }
+
+  // mode === "self": classic self-attack flow (current behavior)
   const method = (p.method ?? "drain") as "drain" | "approve" | "honeypot-swap" | "prompt-inject";
   const amountUsd = Number(p.amount_usd ?? 5_000);
   const amount = parseUnits(String(Math.max(1, Math.round(amountUsd))), 6);
@@ -46,7 +110,7 @@ export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<Comm
 
   const result = await ctx.immunity.check(tx, context);
 
-  ctx.log.info("operator attack run", {
+  ctx.log.info("operator self attack run", {
     method,
     target,
     usdc: amountUsd,
@@ -57,6 +121,7 @@ export async function runAttack(cmd: Command, ctx: AmbientContext): Promise<Comm
   return {
     status: "completed",
     detail: {
+      mode,
       decision: result.decision,
       allowed: result.allowed,
       source: result.source,
