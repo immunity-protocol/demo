@@ -82,9 +82,17 @@ export async function runTraderAmbient(ctx: AmbientContext): Promise<void> {
   }
 
   const incident = Math.random() < INCIDENT_RATE ? pickRandomIncident() : null;
-  const context: CheckContext = incident
+  const baseContext: CheckContext = incident
     ? incident.variant.context
     : { conversation: [{ role: "user", content: "routine treasury operation" }] };
+  // When the tx routes through an ERC-20 contract, the recipient/spender
+  // is buried in the calldata and `tx.to` is the token contract — so the
+  // SDK's AddressMatcher (which probes `tx.to` and `context.counterparty.id`)
+  // would never see the actual counterparty. Surface it explicitly so an
+  // ADDRESS antibody for the recipient fires Tier-1 cache lookups.
+  const context: CheckContext = target
+    ? { ...baseContext, counterparty: { ...(baseContext.counterparty ?? {}), id: target } }
+    : baseContext;
 
   try {
     const result = await ctx.immunity.check(payload.tx, context);
