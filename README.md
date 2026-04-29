@@ -105,6 +105,7 @@ npm run fleet -- -t local boot  # equivalent npm alias (note the --)
 | Command | `-t local` | `-t prod` |
 |---|---|---|
 | `boot` | `start-fleet.sh` then auto-attaches logs | `fly-boot.sh` then auto-attaches `flyctl logs` |
+| `boot --deploy` | flag rejected (use `boot` directly; compose `--build` runs every boot) | runs `deploy` first (image push + secret sync), then `fly-boot.sh` |
 | `stop` | `stop-fleet.sh` | `fly-shutdown.sh` |
 | `reset` | `reset.sh` (compose down + truncate demo tables) | local-only, errors |
 | `status` | `docker compose ps` + `status.sh` | `flyctl status` + DB snapshot via ssh+psql |
@@ -113,7 +114,7 @@ npm run fleet -- -t local boot  # equivalent npm alias (note the --)
 | `scenario <prefix>` | `run-scenario.sh <prefix>` | local-only, errors |
 | `publish-threats` | spins up local axl-spoke, runs `npm run threats:publish` | workstation-only, errors with hint |
 | `fund-og` | `npm run fund:og` | same (target-agnostic, signs with local `DEPLOYER_PRIVATE_KEY`) |
-| `deploy` | prod-only, errors | `flyctl deploy -c fly_fleet.toml -a immunity-fleet` |
+| `deploy` | prod-only, errors | syncs `ANTHROPIC_API_KEY` from `.env` to Fly secrets, then `flyctl deploy -c fly_fleet.toml --remote-only` |
 | `exec` | `docker compose exec <agent> [cmd]` | `flyctl ssh console -a immunity-fleet -C "<cmd>"` |
 
 ### Filter presets for `logs`
@@ -131,7 +132,11 @@ npm run fleet -- -t local boot  # equivalent npm alias (note the --)
 ### Worked examples
 
 ```sh
-# Boot prod, watch only the four success paths in real time.
+# First prod boot after code changes: build+push a fresh image, sync the
+# ANTHROPIC_API_KEY secret from local .env, then scale to 1 machine.
+./scripts/fleet -t prod boot --deploy
+
+# Subsequent restarts (code unchanged) — just scale up the existing image.
 ./scripts/fleet -t prod boot
 ^C                                       # detach logs (fleet keeps running)
 ./scripts/fleet -t prod logs --filter blocks --tail 200

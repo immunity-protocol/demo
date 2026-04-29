@@ -51,7 +51,11 @@ ${C_BOLD}TARGETS${C_RESET}  (required for every command except 'help')
   -t prod     immunity-fleet Fly app (production)
 
 ${C_BOLD}LIFECYCLE${C_RESET}
-  boot [--no-follow]      start the fleet, then auto-attach logs
+  boot [--deploy] [--no-follow]
+                          start the fleet, then auto-attach logs
+                            --deploy      (prod) build+push image first, sync
+                                          ANTHROPIC_API_KEY from local .env
+                            --no-follow   skip the auto-attach
   stop                    shut it down
   reset                   (local only) compose down + truncate demo tables
   status                  health snapshot (DB + container/fly state)
@@ -77,7 +81,8 @@ ${C_BOLD}OPERATOR ACTIONS${C_RESET}
 ${C_BOLD}EXAMPLES${C_RESET}
   scripts/fleet -t local boot
   scripts/fleet -t local logs --filter attacks --tail 200
-  scripts/fleet -t prod boot --no-follow
+  scripts/fleet -t prod boot --deploy            # first boot after code change
+  scripts/fleet -t prod boot                     # subsequent: just scale up
   scripts/fleet -t prod logs trader-15 --filter mints
   scripts/fleet -t prod pause
 EOF
@@ -89,9 +94,28 @@ usage_for() {
 ${C_BOLD}fleet boot${C_RESET} — start the fleet, then auto-attach logs
 
   -t local: ./scripts/start-fleet.sh, then docker compose logs -f
+            (compose's --build flag already rebuilds the agent image)
   -t prod : ./scripts/fly-boot.sh,   then flyctl logs -a $FLY_FLEET_APP
 
+  --deploy      (prod only) build+push a fresh image AND sync
+                ANTHROPIC_API_KEY from your local .env into Fly secrets
+                BEFORE scaling up. Use this on the first boot after code or
+                env-key changes; skip it on plain restart.
   --no-follow   skip the auto-attach (return after boot script exits)
+EOF
+      ;;
+    deploy) cat <<EOF
+${C_BOLD}fleet deploy${C_RESET} — build+push the immunity-fleet image to Fly
+
+  -t prod only.
+
+  Before running flyctl deploy, this command also reads your local .env
+  for ANTHROPIC_API_KEY and stages it as a Fly secret on $FLY_FLEET_APP
+  (--stage so the secret rolls out with the deploy that follows
+  immediately after, no extra restart). If .env or the key is missing,
+  the secret sync is skipped quietly.
+
+  Use as a standalone command, or implicitly via 'boot --deploy'.
 EOF
       ;;
     stop) cat <<EOF
@@ -218,24 +242,65 @@ prod_psql() {
   flyctl ssh console -a "$FLY_DB_HOST_APP" -C "sh -c 'psql \"\$DATABASE_URL\" -c \"$sql\"'"
 }
 
+# Read a single VAR= line from the local .env. Echoes the unquoted value, or
+# nothing if missing. Strips surrounding double quotes so values written as
+# KEY="value" survive cleanly.
+read_env_value() {
+  local key="$1"
+  if [ ! -f "$ROOT/.env" ]; then return 0; fi
+  local raw
+  raw="$(grep -E "^${key}=" "$ROOT/.env" | head -1 | cut -d= -f2-)"
+  raw="${raw#\"}"
+  raw="${raw%\"}"
+  printf '%s' "$raw"
+}
+
+# Stage ANTHROPIC_API_KEY into Fly secrets from the local .env. Idempotent
+# (Fly compares the digest before re-staging). Skips quietly if .env or the
+# key are absent. Uses --stage so the secret rolls out with the next deploy
+# rather than triggering a separate restart.
+sync_anthropic_secret_to_fly() {
+  local key
+  key="$(read_env_value ANTHROPIC_API_KEY)"
+  if [ -z "$key" ]; then
+    note "  no ANTHROPIC_API_KEY in .env (publishers will idle gracefully)"
+    return 0
+  fi
+  note "  syncing ANTHROPIC_API_KEY → fly secrets ($FLY_FLEET_APP, --stage)…"
+  flyctl secrets set --stage --app "$FLY_FLEET_APP" "ANTHROPIC_API_KEY=$key" >/dev/null
+}
+
 # ─── commands ────────────────────────────────────────────────────────────────
 
 cmd_boot() {
   require_target
   local follow=1
+  local do_deploy=0
   if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
     for a in "${EXTRA_ARGS[@]}"; do
       case "$a" in
         --no-follow) follow=0 ;;
+        --deploy)    do_deploy=1 ;;
         *) err "unknown boot flag: $a"; exit 2 ;;
       esac
     done
+  fi
+
+  if [ $do_deploy -eq 1 ] && [ "$TARGET" != "prod" ]; then
+    err "--deploy is only meaningful for -t prod"
+    note "  on -t local, start-fleet.sh already runs 'docker compose up --build'"
+    exit 2
   fi
 
   if [ "$TARGET" = "local" ]; then
     hdr "Booting local fleet (docker-compose)…"
     "$ROOT/scripts/start-fleet.sh"
   else
+    if [ $do_deploy -eq 1 ]; then
+      hdr "Pre-boot deploy: pushing latest fleet image + syncing secrets…"
+      EXTRA_ARGS=()
+      cmd_deploy
+    fi
     hdr "Booting prod fleet (Fly: $FLY_FLEET_APP)…"
     "$ROOT/scripts/fly-boot.sh"
   fi
@@ -394,6 +459,8 @@ cmd_fund_og() {
 cmd_deploy() {
   require_target
   assert_prod
+  hdr "Syncing secrets from local .env into Fly…"
+  sync_anthropic_secret_to_fly
   hdr "Deploying immunity-fleet image to Fly…"
   flyctl deploy -c "$ROOT/fly_fleet.toml" -a "$FLY_FLEET_APP" --remote-only
 }
