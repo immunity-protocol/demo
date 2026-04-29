@@ -47,6 +47,12 @@ const AXL_BLOCK = `
       KEY_PATH: /data/private.pem
     volumes:
       - axl-data:/data
+    # Expose 9002 on the host so orchestration scripts run from the
+    # workstation (npm run threats:publish, ad-hoc Immunity facade
+    # bootstrap) can reach the spoke at http://localhost:9002. Inside the
+    # docker network agents still address it as http://axl-spoke:9002.
+    ports:
+      - "127.0.0.1:9002:9002"
 `;
 
 const NETWORK_BLOCK = `

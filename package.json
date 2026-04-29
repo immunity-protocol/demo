@@ -13,6 +13,8 @@
     "threats:publish": "tsx --env-file=.env scripts/publish-threats.ts",
     "fund:og": "tsx --env-file=.env scripts/fund-agents-og.ts",
     "test:incidents": "tsx scripts/test-incidents.ts",
+    "axl:up": "scripts/axl-spoke-host.sh up",
+    "axl:down": "scripts/axl-spoke-host.sh down",
     "postinstall": "node scripts/patch-0g-broker.mjs"
   },
   "devDependencies": {
