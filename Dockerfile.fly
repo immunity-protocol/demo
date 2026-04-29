@@ -33,6 +33,10 @@ FROM node:20-alpine AS agent-build
 # can compile. Without these, npm install fails on alpine which lacks python.
 RUN apk add --no-cache python3 make g++
 WORKDIR /app
+# Copy the SDK tarball BEFORE npm install. agents/package.json's
+# file:../.tarballs/... reference resolves against the parent of /app/agents
+# inside the image, so we mirror that layout: tarball goes one level up.
+COPY .tarballs /.tarballs
 COPY agents/package.json ./
 RUN npm install --legacy-peer-deps --no-audit --no-fund
 # agents/tsconfig.json extends ../tsconfig.json so we need both. We mount
