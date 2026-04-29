@@ -3,6 +3,7 @@ import type { AmbientContext } from "../context.js";
 import { runAttack } from "./attack.js";
 import { runCheckOnly } from "./check_only.js";
 import { runExternalThreatAlert } from "./external_threat_alert.js";
+import { runInjectPrompt } from "./inject_prompt.js";
 import { runManipulate } from "./manipulate.js";
 import { runSwap } from "./swap.js";
 
@@ -19,6 +20,8 @@ export async function runCommand(cmd: Command, ctx: AmbientContext): Promise<Com
       return runManipulate(cmd, ctx);
     case "external_threat_alert":
       return runExternalThreatAlert(cmd, ctx);
+    case "inject_prompt":
+      return runInjectPrompt(cmd, ctx);
     case "swap":
       return runSwap(cmd, ctx);
     case "check_only":
