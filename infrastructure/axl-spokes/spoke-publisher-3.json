@@ -6,5 +6,5 @@
   ],
   "Listen": [],
   "bridge_addr": "0.0.0.0",
-  "api_port": 9058
+  "api_port": 9046
 }

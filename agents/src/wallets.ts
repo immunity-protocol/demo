@@ -30,8 +30,15 @@ const ROLE_BASE: Record<AgentRole, number> = {
   scenario: 59,
 };
 
+// Fleet sized down from 60 (51 traders) to 48 (39 traders) to fit within
+// 0G testnet's ~50 req/s RPC budget on cold boot. With 60 agents each
+// fetching ~45 antibodies sequentially during cache bootstrap, the herd
+// burned ~6 minutes of pure rate-limited backoff and many agents never
+// fully hydrated. 39 traders × 45 reads in the same 15s stagger window
+// leaves room for the wolves, publishers, and the scenario agent's own
+// boot RPC calls without saturating the limiter.
 const ROLE_COUNT: Record<AgentRole, number> = {
-  trader: 51,
+  trader: 39,
   wolf: 3,
   publisher: 5,
   scenario: 1,
