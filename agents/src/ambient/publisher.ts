@@ -38,7 +38,13 @@ const feedsJson = requireJson("../data/feeds.json") as FeedItem[];
  * (returns DuplicateAntibodyError, treated as benign).
  */
 
-const SCAN_PROBABILITY = 0.05;
+// Bumped from 5% → 15% when the fleet shrunk from 5 publishers to 2.
+// Net cross-fleet scan rate: 5 × 5% = 25% before, 2 × 15% = 30% now —
+// roughly preserved, with each individual publisher visibly more active
+// on the dashboard and one fewer "publisher idle tick" log line per
+// fleet tick. Claude Haiku 4.5 cost stays under the per-day target since
+// total scans/hour barely moved.
+const SCAN_PROBABILITY = 0.15;
 
 const seenThisProcess = new Set<string>();
 const FEED: FeedItem[] = feedsJson;

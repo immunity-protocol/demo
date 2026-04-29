@@ -40,7 +40,7 @@ const ROLE_BASE: Record<AgentRole, number> = {
 const ROLE_COUNT: Record<AgentRole, number> = {
   trader: 39,
   wolf: 3,
-  publisher: 5,
+  publisher: 2,
   scenario: 1,
 };
 

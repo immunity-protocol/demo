@@ -42,7 +42,4 @@ wolf-2
 wolf-3
 publisher-1
 publisher-2
-publisher-3
-publisher-4
-publisher-5
 scenario-1
