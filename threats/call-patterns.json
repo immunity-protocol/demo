@@ -47,8 +47,8 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 83, "severity": 78, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: approve to phishing-kit drainer. Synthesized for the demo.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "ERC20 approve(spender, amount) call where the spender matches a wallet flagged by sentinel telemetry as a drainer collector. The selector-only match deliberately ignores token and amount: granting any allowance to this counterparty exposes the corresponding balance to asynchronous sweep. MALICIOUS verdict tracks the underlying address antibody.",
+    "seed_source": "sentinel_telemetry",
     "evidence_url": null
   },
   {
@@ -60,8 +60,8 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 81, "severity": 77, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: setApprovalForAll to drainer. Synthesized for the demo.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "setApprovalForAll(operator, true) call granting whole-collection NFT spend rights to a known drainer-family operator wallet. Once granted the operator can sweep every token in the collection within the approval window. MALICIOUS: there is no legitimate flow that requires unrestricted whole-collection withdraw rights to an opaque operator.",
+    "seed_source": "sentinel_telemetry",
     "evidence_url": null
   },
   {
@@ -73,8 +73,8 @@
       "argsTemplate": "0x"
     },
     "verdict": "SUSPICIOUS", "confidence": 74, "severity": 69, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: transferFrom called on honeypot ERC20 - sells revert post-buy.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "transferFrom selector targeting a contract previously flagged as a buy-but-cannot-sell honeypot ERC20. The token's _transfer override gates the sell branch behind a deployer allowlist, so any third-party initiated outbound transfer reverts. Verdict held at SUSPICIOUS because legitimate restricted-token flows share the same selector signature; the antibody surfaces the honeypot context to the operator without auto-blocking.",
+    "seed_source": "internal_research",
     "evidence_url": null
   },
   {

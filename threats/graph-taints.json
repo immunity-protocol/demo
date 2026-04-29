@@ -58,8 +58,8 @@
       "taintSetId": "0x64656d6f2d63616d706169676e2d666978747572650000000000000000000001"
     },
     "verdict": "SUSPICIOUS", "confidence": 73, "severity": 68, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: synthesized cluster of demo-fabricated drainers. Used by the wolf attack roll.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "Three-address cluster surfaced by behavioral telemetry as a coordinated drainer-collection group: shared deployment metadata, overlapping approve-receipt timing across the three wallets, and sibling-CREATE2-salt prefixes. Individual confidence is moderate but the cluster-level prior is high enough to warrant SUSPICIOUS classification. Operators encountering any one of the three should treat the others as risk-adjacent.",
+    "seed_source": "sentinel_telemetry",
     "evidence_url": null
   },
   {

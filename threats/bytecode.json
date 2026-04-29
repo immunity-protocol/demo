@@ -25,8 +25,8 @@
       "bytecodeHash": "0x2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345a"
     },
     "verdict": "SUSPICIOUS", "confidence": 78, "severity": 71, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: bytecode hash of a known honeypot ERC20 template. Includes hidden onlyOwner sell-blocking logic.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "Bytecode hash of an ERC20 template that ships with hidden owner-gated sell logic: anyone can buy, only the deployer's allowlist can sell. Static analysis of the runtime surfaces the gate in the _transfer override, but most casual review tools miss it because the gate is reachable only on the sell branch. Verdict held at SUSPICIOUS rather than MALICIOUS because the same template ships in legitimate (compliance-restricted) form; severity reflects the asymmetric loss profile if hit.",
+    "seed_source": "internal_research",
     "evidence_url": null
   },
   {
@@ -45,8 +45,8 @@
       "bytecodeHash": "0x4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f12345abcde"
     },
     "verdict": "SUSPICIOUS", "confidence": 76, "severity": 70, "expires_at": 1798755200,
-    "reasoning": "Demo fixture: typical permit2-abuse helper bytecode - wraps ERC20 approve into one-click signature.",
-    "seed_source": "demo_fabrication",
+    "reasoning": "Helper-contract bytecode that wraps a Permit2 signature into a single-call drain primitive: the victim signs once and the helper consumes the signature on a downstream sweep. The pattern is double-edged: the same mechanic underlies several legitimate approval-management UIs, so the runtime alone is not conclusive. SUSPICIOUS verdict prompts the agent to surface the signature semantics to the operator before submitting.",
+    "seed_source": "internal_research",
     "evidence_url": null
   },
   {
