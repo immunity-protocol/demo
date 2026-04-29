@@ -1,0 +1,439 @@
+#!/usr/bin/env bash
+#
+# fleet — unified CLI for the immunity-demo operator surface.
+#
+# Wraps the existing scripts (start-fleet.sh, fly-boot.sh, pause-fleet.sh, ...)
+# behind one entrypoint with explicit `-t local|prod` target selection and an
+# auto-attach logs flow after `boot`. No new logic — pure dispatch.
+#
+# See `fleet help` for the full command surface.
+#
+# Conventions:
+#   * Target is REQUIRED for every operational command (boot/stop/logs/...).
+#     There is no smart default — we want zero ambiguity between local and prod.
+#   * Existing scripts under scripts/ remain authoritative; this CLI does not
+#     duplicate their logic. Editing those scripts continues to work.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+ROOT="$(cd -- "$SCRIPT_DIR/.." &>/dev/null && pwd)"
+cd "$ROOT"
+
+FLY_FLEET_APP="${IMMUNITY_FLEET_APP:-immunity-fleet}"
+# The prod database lives in immunity-db (Postgres-flex), but the easiest way
+# to reach it is via the immunity-app container which has psql + DATABASE_URL.
+FLY_DB_HOST_APP="${IMMUNITY_DB_HOST_APP:-immunity-app}"
+
+# ─── color helpers ───────────────────────────────────────────────────────────
+if [ -t 1 ]; then
+  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'
+  C_RED=$'\033[31m'; C_GRN=$'\033[32m'; C_YEL=$'\033[33m'; C_CYA=$'\033[36m'
+else
+  C_RESET=; C_BOLD=; C_DIM=; C_RED=; C_GRN=; C_YEL=; C_CYA=
+fi
+
+err()  { printf '%s%s%s\n' "$C_RED"  "$1" "$C_RESET" >&2; }
+note() { printf '%s%s%s\n' "$C_DIM"  "$1" "$C_RESET"; }
+hdr()  { printf '\n%s%s%s\n'         "${C_BOLD}${C_CYA}" "$1" "$C_RESET"; }
+
+# ─── usage ───────────────────────────────────────────────────────────────────
+usage() {
+  cat <<EOF
+${C_BOLD}fleet${C_RESET} — unified CLI for the immunity-demo fleet
+
+${C_BOLD}USAGE${C_RESET}
+  scripts/fleet -t {local|prod} <command> [args]
+  scripts/fleet help [command]
+
+${C_BOLD}TARGETS${C_RESET}  (required for every command except 'help')
+  -t local    docker-compose stack on this workstation
+  -t prod     immunity-fleet Fly app (production)
+
+${C_BOLD}LIFECYCLE${C_RESET}
+  boot [--no-follow]      start the fleet, then auto-attach logs
+  stop                    shut it down
+  reset                   (local only) compose down + truncate demo tables
+  status                  health snapshot (DB + container/fly state)
+
+${C_BOLD}AMBIENT CONTROL${C_RESET}
+  pause                   demo.fleet_state.ambient_paused = true
+  resume                  demo.fleet_state.ambient_paused = false
+
+${C_BOLD}OBSERVATION${C_RESET}
+  logs [agent] [opts]     tail logs (auto-follows; --no-follow to dump-once)
+                            --filter <preset>   blocks|attacks|mints|incidents|errors
+                            --grep <regex>      arbitrary regex on top of filter
+                            --tail N            backlog lines (default 100)
+                            --no-follow         dump and exit
+
+${C_BOLD}OPERATOR ACTIONS${C_RESET}
+  scenario <prefix>       (local only) run scenarios/<prefix>*
+  publish-threats         publish genesis catalog (uses local axl spoke)
+  fund-og                 send OG to all 60 agent wallets
+  deploy                  (prod only) flyctl deploy -c fly_fleet.toml
+  exec <agent> [cmd]      local: docker compose exec; prod: fly ssh console
+
+${C_BOLD}EXAMPLES${C_RESET}
+  scripts/fleet -t local boot
+  scripts/fleet -t local logs --filter attacks --tail 200
+  scripts/fleet -t prod boot --no-follow
+  scripts/fleet -t prod logs trader-15 --filter mints
+  scripts/fleet -t prod pause
+EOF
+}
+
+usage_for() {
+  case "${1:-}" in
+    boot) cat <<EOF
+${C_BOLD}fleet boot${C_RESET} — start the fleet, then auto-attach logs
+
+  -t local: ./scripts/start-fleet.sh, then docker compose logs -f
+  -t prod : ./scripts/fly-boot.sh,   then flyctl logs -a $FLY_FLEET_APP
+
+  --no-follow   skip the auto-attach (return after boot script exits)
+EOF
+      ;;
+    stop) cat <<EOF
+${C_BOLD}fleet stop${C_RESET} — shut down the fleet
+
+  -t local: ./scripts/stop-fleet.sh
+  -t prod : ./scripts/fly-shutdown.sh
+EOF
+      ;;
+    pause|resume) cat <<EOF
+${C_BOLD}fleet ${1}${C_RESET} — toggle ambient_paused on demo.fleet_state
+
+  -t local: writes via local Postgres (DATABASE_URL from .env)
+  -t prod : writes via flyctl ssh -a $FLY_DB_HOST_APP -> psql
+EOF
+      ;;
+    logs) cat <<EOF
+${C_BOLD}fleet logs${C_RESET} — tail fleet logs
+
+  -t local: docker compose logs (per-container, optional [agent] argument)
+  -t prod : flyctl logs (single supervisord stream; [agent] becomes a grep)
+
+  --filter blocks       ambient block | antibody=IMM | source=cache
+  --filter attacks      wolf social | inject_prompt | axl_dm | social_feed_post
+  --filter mints        publisher minted | seedDerived=true | TEE outcome
+  --filter incidents    incidentFamily= | incidentVariant= | incidentSurface=
+  --filter errors       level":"error | level":"warn | fatal
+  --grep <regex>        any extra grep pattern
+  --tail N              backlog lines (default 100)
+  --no-follow           print + exit (no streaming)
+EOF
+      ;;
+    *) usage ;;
+  esac
+}
+
+# ─── parse globals ───────────────────────────────────────────────────────────
+TARGET=""
+COMMAND=""
+EXTRA_ARGS=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -t|--target)
+      TARGET="${2:-}"; shift 2 ;;
+    --target=*)
+      TARGET="${1#*=}"; shift ;;
+    -h|--help)
+      usage; exit 0 ;;
+    help)
+      shift
+      if [ $# -gt 0 ]; then usage_for "$1"; else usage; fi
+      exit 0 ;;
+    -*)
+      err "unknown global flag: $1"; usage; exit 2 ;;
+    *)
+      COMMAND="$1"; shift
+      while [ $# -gt 0 ]; do EXTRA_ARGS+=("$1"); shift; done
+      break ;;
+  esac
+done
+
+# ─── helpers ─────────────────────────────────────────────────────────────────
+require_target() {
+  if [ -z "$TARGET" ]; then
+    err "this command requires -t local or -t prod"
+    note "  scripts/fleet -t local $COMMAND"
+    note "  scripts/fleet -t prod  $COMMAND"
+    exit 2
+  fi
+  case "$TARGET" in
+    local|prod) ;;
+    *) err "invalid target: '$TARGET' (expected: local | prod)"; exit 2 ;;
+  esac
+}
+
+assert_local() {
+  if [ "$TARGET" != "local" ]; then
+    err "$COMMAND is local-only"
+    exit 2
+  fi
+}
+assert_prod() {
+  if [ "$TARGET" != "prod" ]; then
+    err "$COMMAND is prod-only"
+    exit 2
+  fi
+}
+
+# Map a filter preset name to an extended-regex; empty preset → empty regex.
+filter_regex_for_preset() {
+  case "${1:-}" in
+    "")        echo "" ;;
+    blocks)    echo 'ambient block|antibody=IMM|source=cache|social_dm blocked|social_feed scan: blocked' ;;
+    attacks)   echo 'wolf social|inject_prompt|attack ALLOWED|axl_dm|social_feed_post|wolf attack' ;;
+    mints)     echo 'publisher minted|seedDerived=true|TEE outcome|publisher scanning' ;;
+    incidents) echo 'incidentFamily=|incidentVariant=|incidentSurface=' ;;
+    errors)    echo '"level":"error|"level":"warn|fatal|FATAL' ;;
+    *)
+      err "unknown filter preset: '$1' (expected: blocks|attacks|mints|incidents|errors)"
+      exit 2 ;;
+  esac
+}
+
+# Compose grep stages for a preset + extra grep, line-buffered for streaming.
+apply_filters() {
+  local preset_re="$1"
+  local extra_re="$2"
+  if [ -n "$preset_re" ] && [ -n "$extra_re" ]; then
+    grep -E --line-buffered "$preset_re" | grep -E --line-buffered "$extra_re"
+  elif [ -n "$preset_re" ]; then
+    grep -E --line-buffered "$preset_re"
+  elif [ -n "$extra_re" ]; then
+    grep -E --line-buffered "$extra_re"
+  else
+    cat
+  fi
+}
+
+# Run a one-shot SQL statement against the prod database via the immunity-app
+# container's pre-wired DATABASE_URL.
+prod_psql() {
+  local sql="$1"
+  flyctl ssh console -a "$FLY_DB_HOST_APP" -C "sh -c 'psql \"\$DATABASE_URL\" -c \"$sql\"'"
+}
+
+# ─── commands ────────────────────────────────────────────────────────────────
+
+cmd_boot() {
+  require_target
+  local follow=1
+  if [ ${#EXTRA_ARGS[@]} -gt 0 ]; then
+    for a in "${EXTRA_ARGS[@]}"; do
+      case "$a" in
+        --no-follow) follow=0 ;;
+        *) err "unknown boot flag: $a"; exit 2 ;;
+      esac
+    done
+  fi
+
+  if [ "$TARGET" = "local" ]; then
+    hdr "Booting local fleet (docker-compose)…"
+    "$ROOT/scripts/start-fleet.sh"
+  else
+    hdr "Booting prod fleet (Fly: $FLY_FLEET_APP)…"
+    "$ROOT/scripts/fly-boot.sh"
+  fi
+
+  if [ $follow -eq 1 ]; then
+    hdr "Attaching logs (Ctrl-C to detach; the fleet keeps running)…"
+    EXTRA_ARGS=()
+    cmd_logs
+  fi
+}
+
+cmd_stop() {
+  require_target
+  if [ "$TARGET" = "local" ]; then
+    hdr "Stopping local fleet…"
+    "$ROOT/scripts/stop-fleet.sh"
+  else
+    hdr "Stopping prod fleet (Fly: $FLY_FLEET_APP)…"
+    "$ROOT/scripts/fly-shutdown.sh"
+  fi
+}
+
+cmd_reset() {
+  require_target
+  assert_local
+  hdr "Resetting local fleet (compose down + truncate demo tables)…"
+  "$ROOT/scripts/reset.sh"
+}
+
+cmd_pause() {
+  require_target
+  if [ "$TARGET" = "local" ]; then
+    hdr "Pausing local fleet…"
+    "$ROOT/scripts/pause-fleet.sh"
+  else
+    hdr "Pausing prod fleet (flyctl ssh -> psql)…"
+    prod_psql "UPDATE demo.fleet_state SET ambient_paused=true, paused_at=now() WHERE id=1;"
+  fi
+}
+
+cmd_resume() {
+  require_target
+  if [ "$TARGET" = "local" ]; then
+    hdr "Resuming local fleet…"
+    "$ROOT/scripts/resume-fleet.sh"
+  else
+    hdr "Resuming prod fleet (flyctl ssh -> psql)…"
+    prod_psql "UPDATE demo.fleet_state SET ambient_paused=false, paused_at=NULL WHERE id=1;"
+  fi
+}
+
+cmd_status() {
+  require_target
+  if [ "$TARGET" = "local" ]; then
+    hdr "Local containers (docker compose ps)"
+    docker compose ps 2>/dev/null || note "  no docker-compose stack running"
+    hdr "Demo DB state"
+    "$ROOT/scripts/status.sh"
+  else
+    hdr "Prod fleet status (Fly: $FLY_FLEET_APP)"
+    flyctl status -a "$FLY_FLEET_APP" || true
+    hdr "Demo DB state (flyctl ssh -> psql)"
+    prod_psql "SELECT ambient_paused, paused_at FROM demo.fleet_state WHERE id=1;"
+    prod_psql "SELECT role, count(*) AS online FROM demo.agent_heartbeat WHERE last_seen >= now() - interval '120 seconds' GROUP BY role ORDER BY role;"
+  fi
+}
+
+cmd_logs() {
+  require_target
+  local agent=""
+  local follow=1
+  local filter_preset=""
+  local extra_grep=""
+  local tail_n="100"
+
+  local i=0
+  while [ $i -lt ${#EXTRA_ARGS[@]} ]; do
+    local arg="${EXTRA_ARGS[$i]}"
+    case "$arg" in
+      --filter)    filter_preset="${EXTRA_ARGS[$((i+1))]:-}"; i=$((i+2)) ;;
+      --filter=*)  filter_preset="${arg#*=}";                 i=$((i+1)) ;;
+      --grep)      extra_grep="${EXTRA_ARGS[$((i+1))]:-}";    i=$((i+2)) ;;
+      --grep=*)    extra_grep="${arg#*=}";                    i=$((i+1)) ;;
+      --tail)      tail_n="${EXTRA_ARGS[$((i+1))]:-}";        i=$((i+2)) ;;
+      --tail=*)    tail_n="${arg#*=}";                        i=$((i+1)) ;;
+      --no-follow) follow=0;                                  i=$((i+1)) ;;
+      -*)          err "unknown logs flag: $arg"; exit 2 ;;
+      *)           agent="$arg";                              i=$((i+1)) ;;
+    esac
+  done
+
+  local preset_re=""
+  preset_re="$(filter_regex_for_preset "$filter_preset")"
+
+  if [ "$TARGET" = "local" ]; then
+    local cmd_args=("logs" "--tail=$tail_n")
+    if [ $follow -eq 1 ]; then cmd_args+=("-f"); fi
+    if [ -n "$agent" ]; then cmd_args+=("$agent"); fi
+    docker compose "${cmd_args[@]}" 2>&1 | apply_filters "$preset_re" "$extra_grep"
+  else
+    # Fly logs are a single supervisord stream — fold the agent name into grep
+    # so per-agent filtering still works.
+    local agent_re=""
+    if [ -n "$agent" ]; then agent_re="$agent"; fi
+
+    local effective_re="$preset_re"
+    if [ -n "$agent_re" ]; then
+      if [ -n "$effective_re" ]; then
+        effective_re="(${effective_re}).*${agent_re}|${agent_re}.*(${effective_re})"
+      else
+        effective_re="$agent_re"
+      fi
+    fi
+
+    if [ $follow -eq 1 ]; then
+      flyctl logs -a "$FLY_FLEET_APP" 2>&1 | apply_filters "$effective_re" "$extra_grep"
+    else
+      flyctl logs -a "$FLY_FLEET_APP" --no-tail 2>&1 \
+        | tail -n "$tail_n" \
+        | apply_filters "$effective_re" "$extra_grep"
+    fi
+  fi
+}
+
+cmd_scenario() {
+  require_target
+  assert_local
+  if [ ${#EXTRA_ARGS[@]} -eq 0 ]; then
+    err "usage: fleet -t local scenario <prefix>"
+    exit 2
+  fi
+  "$ROOT/scripts/run-scenario.sh" "${EXTRA_ARGS[0]}"
+}
+
+cmd_publish_threats() {
+  require_target
+  if [ "$TARGET" = "prod" ]; then
+    err "publish-threats is workstation-only (signs with local DEPLOYER_PRIVATE_KEY)"
+    note "  use -t local; either fleet writes to the same on-chain Registry"
+    exit 2
+  fi
+  hdr "Ensuring local AXL spoke is up…"
+  "$ROOT/scripts/axl-spoke-host.sh" up
+  hdr "Publishing threat catalog (AXL_URL=http://localhost:9002)…"
+  if [ -n "${LIMIT:-}" ];              then note "  LIMIT=$LIMIT (capping new publishes)"; fi
+  if [ -n "${PUBLISH_TIMEOUT_MS:-}" ]; then note "  PUBLISH_TIMEOUT_MS=$PUBLISH_TIMEOUT_MS"; fi
+  AXL_URL=http://localhost:9002 npm run threats:publish
+}
+
+cmd_fund_og() {
+  require_target
+  hdr "Funding agent wallets with OG (target-agnostic; uses .env DEPLOYER_PRIVATE_KEY)…"
+  npm run fund:og
+}
+
+cmd_deploy() {
+  require_target
+  assert_prod
+  hdr "Deploying immunity-fleet image to Fly…"
+  flyctl deploy -c "$ROOT/fly_fleet.toml" -a "$FLY_FLEET_APP" --remote-only
+}
+
+cmd_exec() {
+  require_target
+  if [ ${#EXTRA_ARGS[@]} -eq 0 ]; then
+    if [ "$TARGET" = "local" ]; then
+      err "usage: fleet -t local exec <agent> [cmd]"
+    else
+      err "usage: fleet -t prod exec [cmd]   (single supervisord container)"
+    fi
+    exit 2
+  fi
+  if [ "$TARGET" = "local" ]; then
+    local agent="${EXTRA_ARGS[0]}"
+    if [ ${#EXTRA_ARGS[@]} -eq 1 ]; then
+      docker compose exec "$agent" sh
+    else
+      docker compose exec "$agent" "${EXTRA_ARGS[@]:1}"
+    fi
+  else
+    flyctl ssh console -a "$FLY_FLEET_APP" -C "${EXTRA_ARGS[*]}"
+  fi
+}
+
+# ─── dispatch ────────────────────────────────────────────────────────────────
+case "${COMMAND:-}" in
+  boot)              cmd_boot ;;
+  stop)              cmd_stop ;;
+  reset)             cmd_reset ;;
+  status)            cmd_status ;;
+  pause)             cmd_pause ;;
+  resume)            cmd_resume ;;
+  logs)              cmd_logs ;;
+  scenario)          cmd_scenario ;;
+  publish-threats)   cmd_publish_threats ;;
+  fund-og)           cmd_fund_og ;;
+  deploy)            cmd_deploy ;;
+  exec)              cmd_exec ;;
+  ""|help)           usage ;;
+  *)                 err "unknown command: '$COMMAND'"; usage; exit 2 ;;
+esac

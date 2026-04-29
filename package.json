@@ -15,6 +15,7 @@
     "test:incidents": "tsx scripts/test-incidents.ts",
     "axl:up": "scripts/axl-spoke-host.sh up",
     "axl:down": "scripts/axl-spoke-host.sh down",
+    "fleet": "scripts/fleet",
     "postinstall": "node scripts/patch-0g-broker.mjs"
   },
   "devDependencies": {
