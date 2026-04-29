@@ -80,23 +80,85 @@ A Hetzner CPX21 / DigitalOcean $24-tier droplet is enough.
 
 6. **Bring the fleet up**:
    ```sh
-   ./scripts/start-fleet.sh
+   ./scripts/fleet -t local boot
    ```
-   Builds the agent image once, then launches 60 agent containers + axl-spoke. `docker compose ps` should show all `running`.
+   Builds the agent image, launches 60 agent containers + axl-spoke, then auto-attaches `docker compose logs -f`. Ctrl-C detaches the log stream without stopping the fleet. `docker compose ps` should show all `running`.
 
 7. **Verify**:
    ```sh
-   ./scripts/status.sh
+   ./scripts/fleet -t local status
    ```
    Should report 60 agents online within 60 seconds.
 
-## Day-to-day
+## Fleet CLI
 
-- **Pause / resume ambient**: `./scripts/pause-fleet.sh`, `./scripts/resume-fleet.sh`. Same effect as the `/playground` admin buttons. Scenario commands still execute when paused.
-- **Trigger a scripted scenario**: `./scripts/run-scenario.sh 01` (or `fresh-detection`, etc.).
-- **Reset everything except the AXL identity**: `./scripts/reset.sh`. Truncates the queue and heartbeat table; keeps `axl-data` so peers don't see a fresh identity.
+`scripts/fleet` is the canonical operator entrypoint. It wraps every shell script under `scripts/` plus the relevant `flyctl` calls, behind a single CLI with explicit `-t local` / `-t prod` target selection. Same code paths, just one place to remember.
+
+```sh
+./scripts/fleet help            # full command surface
+./scripts/fleet help <command>  # per-command details (boot, logs, etc.)
+npm run fleet -- -t local boot  # equivalent npm alias (note the --)
+```
+
+**Targets are required.** Every command (except `help`) needs `-t local` or `-t prod` — there's no smart default. This is deliberate: pause-the-wrong-fleet bugs are loud failures otherwise.
+
+| Command | `-t local` | `-t prod` |
+|---|---|---|
+| `boot` | `start-fleet.sh` then auto-attaches logs | `fly-boot.sh` then auto-attaches `flyctl logs` |
+| `stop` | `stop-fleet.sh` | `fly-shutdown.sh` |
+| `reset` | `reset.sh` (compose down + truncate demo tables) | local-only, errors |
+| `status` | `docker compose ps` + `status.sh` | `flyctl status` + DB snapshot via ssh+psql |
+| `pause` / `resume` | `pause-fleet.sh` / `resume-fleet.sh` (local Postgres) | `flyctl ssh -a immunity-app -C 'psql … UPDATE demo.fleet_state …'` |
+| `logs` | `docker compose logs -f [agent]` | `flyctl logs -a immunity-fleet` (agent name folded into a grep) |
+| `scenario <prefix>` | `run-scenario.sh <prefix>` | local-only, errors |
+| `publish-threats` | spins up local axl-spoke, runs `npm run threats:publish` | workstation-only, errors with hint |
+| `fund-og` | `npm run fund:og` | same (target-agnostic, signs with local `DEPLOYER_PRIVATE_KEY`) |
+| `deploy` | prod-only, errors | `flyctl deploy -c fly_fleet.toml -a immunity-fleet` |
+| `exec` | `docker compose exec <agent> [cmd]` | `flyctl ssh console -a immunity-fleet -C "<cmd>"` |
+
+### Filter presets for `logs`
+
+`logs --filter <preset>` greps the stream for the patterns the demo's success paths emit. Presets compose with `--grep <regex>` for further narrowing.
+
+| Preset | Matches |
+|---|---|
+| `blocks` | `ambient block`, `antibody=IMM`, `source=cache`, `social_dm blocked`, `social_feed scan: blocked` |
+| `attacks` | `wolf social`, `inject_prompt`, `axl_dm`, `social_feed_post`, `wolf attack` |
+| `mints` | `publisher minted`, `seedDerived=true`, `TEE outcome`, `publisher scanning` |
+| `incidents` | `incidentFamily=`, `incidentVariant=`, `incidentSurface=` |
+| `errors` | `"level":"error"`, `"level":"warn"`, `fatal` |
+
+### Worked examples
+
+```sh
+# Boot prod, watch only the four success paths in real time.
+./scripts/fleet -t prod boot
+^C                                       # detach logs (fleet keeps running)
+./scripts/fleet -t prod logs --filter blocks --tail 200
+./scripts/fleet -t prod logs --filter attacks --grep trader-15
+
+# Pause prod ambient before a live demo (manual scenarios still execute).
+./scripts/fleet -t prod pause
+# … run scripted scenarios via the playground …
+./scripts/fleet -t prod resume
+
+# Local round-trip during development.
+./scripts/fleet -t local boot --no-follow   # boot without auto-attach
+./scripts/fleet -t local logs trader-1 --filter incidents
+./scripts/fleet -t local exec wolf-1 sh     # interactive shell inside one container
+./scripts/fleet -t local stop
+
+# Genesis publish (workstation-only; uses local axl spoke automatically).
+./scripts/fleet -t local publish-threats
+LIMIT=3 ./scripts/fleet -t local publish-threats   # smoke-test with 3 entries
+PUBLISH_TIMEOUT_MS=180000 ./scripts/fleet -t local publish-threats
+```
+
+### Day-to-day, also
+
 - **Regenerate compose** after editing `agents/src/wallets.ts` or `display_names.ts`: `npm run compose:generate`.
 - **Regenerate supervisord** for the Fly deployment: `npm run supervisor:generate`.
+- The individual scripts (`start-fleet.sh`, `pause-fleet.sh`, `fly-boot.sh`, …) still work and remain authoritative; the CLI is a thin wrapper, not a replacement.
 
 ## Deploying to Fly.io
 
@@ -126,14 +188,18 @@ fly deploy --config fly_fleet.toml --app immunity-fleet --remote-only
 
 ### Day-to-day
 
-| Want to | Run | Effect |
+The unified `scripts/fleet` CLI handles all of these — the explicit table below is the underlying primitive each command wraps.
+
+| Want to | CLI | Underlying |
 |---|---|---|
-| Boot the swarm | `./scripts/fly-boot.sh` | `fly scale count 1`, agents come up over ~5 min |
-| Pause **activity** (machine stays warm) | Click "Pause ambient" in `/playground` (admin tier) | Ambient stops, scenario commands still execute, agents stay heartbeating |
-| Resume activity | Click "Resume ambient" | Ambient resumes within ~90s (one tick) |
-| Fully shut down | `./scripts/fly-shutdown.sh` | `fly scale count 0`, billing stops; spoke identity preserved on the volume |
-| Tail logs | `fly logs --app immunity-fleet` | |
-| Inspect supervisord state | `fly ssh console --app immunity-fleet -C 'supervisorctl status'` | Lists all 60 agent processes + the spoke |
+| Boot the swarm | `./scripts/fleet -t prod boot` | `fly scale count 1`, agents come up over ~5 min |
+| Tail logs | `./scripts/fleet -t prod logs` | `fly logs --app immunity-fleet` |
+| Filtered logs | `./scripts/fleet -t prod logs --filter mints` | `fly logs ... \| grep -E '<preset>'` |
+| Pause ambient | `./scripts/fleet -t prod pause` | `flyctl ssh ... psql -c "UPDATE demo.fleet_state ..."` (also reachable from `/playground` admin tier) |
+| Resume ambient | `./scripts/fleet -t prod resume` | symmetric |
+| Fully shut down | `./scripts/fleet -t prod stop` | `fly scale count 0`, billing stops; spoke identity preserved |
+| Inspect supervisord | `./scripts/fleet -t prod exec 'supervisorctl status'` | Lists all 60 agent processes + the spoke |
+| Deploy a new image | `./scripts/fleet -t prod deploy` | `flyctl deploy -c fly_fleet.toml --remote-only` |
 
 ### What's in the image
 
