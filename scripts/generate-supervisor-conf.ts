@@ -75,11 +75,14 @@ const ROLE_PRIORITY: Record<AgentRole, number> = {
 };
 
 // Stagger agent startup so 60 simultaneous boots don't blow past the 0G
-// public RPC's 50 req/s cap. 2000ms × ordinal ⇒ full fleet finishes
-// booting in ~2 minutes after the spokes are up. The first live boot
-// (with 500ms stagger) saw a thundering-herd pile-up at the rate limiter
-// that left ~20 agents stuck in retry loops; 2s gives plenty of room.
-const STARTUP_STAGGER_MS = 2000;
+// public RPC's 50 req/s cap. The cache-bootstrap step inside immunity.start()
+// fetches ~45 antibodies per agent (60 × 45 = 2700 reads at boot); even
+// with concurrency=1 + per-call retry, packing all of those into a 2-minute
+// window saturates the limiter and many seqs end up un-fetched. 15s × ordinal
+// spreads the bootstrap RPC pressure over ~15 minutes total — slow, but the
+// caches actually populate, which is the precondition for any cache-hit
+// blocks to land on the dashboard.
+const STARTUP_STAGGER_MS = 15_000;
 
 // Spokes also stagger but more tightly — they only do peer-handshake
 // work, not on-chain RPC, so they don't pressure the rate limiter.
