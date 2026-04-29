@@ -41,7 +41,12 @@ COPY tsconfig.json /tsconfig.json
 COPY agents/tsconfig.json ./
 RUN sed -i 's|"../tsconfig.json"|"/tsconfig.json"|' tsconfig.json
 COPY agents/src ./src
-RUN npx tsc -p tsconfig.json
+# Use the package.json `build` script so the post-tsc step that copies
+# non-TS data files (agents/src/data/*.json — most importantly feeds.json
+# loaded by the LLM-driven publisher) lands in dist/data/. Calling tsc
+# directly skips the cp and the runtime crashes on the missing feeds.json
+# import.
+RUN npm run build
 
 # ─── stage 3: runtime ────────────────────────────────────────────────────
 FROM node:20-alpine AS runtime
