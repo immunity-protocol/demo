@@ -126,17 +126,158 @@ export async function getFleetState(client: Pool | PoolClient): Promise<FleetSta
 
 export async function upsertHeartbeat(
   client: Pool | PoolClient,
-  args: { agentId: string; role: string; address: string; displayName: string },
+  args: { agentId: string; role: string; address: string; displayName: string; axlPeerId?: string | null },
 ): Promise<void> {
   const addressBytes = `\\x${args.address.replace(/^0x/, "").toLowerCase()}`;
+  // axl_peer_id is the agent's full ed25519 pubkey from /topology. Other
+  // agents read it back via getAxlPeerIdFor() to address /send. The column
+  // is nullable: agents that haven't yet completed topology (or are running
+  // pre-Phase-4 builds) leave it null; the wolf social-dm code skips
+  // targets whose peer-id is null.
   await client.query(
-    `INSERT INTO demo.agent_heartbeat (agent_id, role, address, display_name, last_seen)
-     VALUES ($1, $2, $3, $4, now())
+    `INSERT INTO demo.agent_heartbeat (agent_id, role, address, display_name, axl_peer_id, last_seen)
+     VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (agent_id) DO UPDATE
         SET role = EXCLUDED.role,
             address = EXCLUDED.address,
             display_name = EXCLUDED.display_name,
+            axl_peer_id = COALESCE(EXCLUDED.axl_peer_id, demo.agent_heartbeat.axl_peer_id),
             last_seen = now()`,
-    [args.agentId, args.role, addressBytes, args.displayName],
+    [args.agentId, args.role, addressBytes, args.displayName, args.axlPeerId ?? null],
   );
+}
+
+export interface OnlinePeer {
+  agentId: string;
+  role: string;
+  axlPeerId: string;
+  displayName: string;
+}
+
+const ONLINE_WINDOW_SECONDS = 180;
+
+/**
+ * Online traders that have published an axl_peer_id. Used by wolves to
+ * pick a target for AXL DM attacks. Excludes the caller's own agent_id.
+ */
+export async function listOnlineTargetTraders(
+  client: Pool | PoolClient,
+  excludeAgentId: string,
+): Promise<OnlinePeer[]> {
+  const res = await client.query<{ agent_id: string; role: string; axl_peer_id: string; display_name: string }>(
+    `SELECT agent_id, role, axl_peer_id, display_name
+       FROM demo.agent_heartbeat
+      WHERE role = 'trader'
+        AND agent_id <> $1
+        AND axl_peer_id IS NOT NULL
+        AND last_seen >= now() - ($2 || ' seconds')::interval`,
+    [excludeAgentId, String(ONLINE_WINDOW_SECONDS)],
+  );
+  return res.rows.map((r) => ({
+    agentId: r.agent_id,
+    role: r.role,
+    axlPeerId: r.axl_peer_id,
+    displayName: r.display_name,
+  }));
+}
+
+/**
+ * Pick a publisher to receive a queued external_threat_alert command.
+ * Round-robin via random pick from online publishers. Returns null when
+ * no publisher is online (the playground/webhook caller surfaces an error).
+ */
+export async function pickOnlinePublisher(client: Pool | PoolClient): Promise<string | null> {
+  const res = await client.query<{ agent_id: string }>(
+    `SELECT agent_id
+       FROM demo.agent_heartbeat
+      WHERE role = 'publisher'
+        AND last_seen >= now() - ($1 || ' seconds')::interval
+      ORDER BY random()
+      LIMIT 1`,
+    [String(ONLINE_WINDOW_SECONDS)],
+  );
+  return res.rows[0]?.agent_id ?? null;
+}
+
+export interface SocialFeedRow {
+  id: string;
+  source: string;
+  url: string;
+  content: string;
+  postedByAgentId: string | null;
+}
+
+/**
+ * Insert a wolf-authored post into demo.social_feed. The trader scan path
+ * picks unread rows up; the indirect-injection content fires when the
+ * marker substring matches a known SEMANTIC antibody.
+ */
+export async function insertSocialFeedPost(
+  client: Pool | PoolClient,
+  args: { source: string; url: string; content: string; postedByAgentId: string },
+): Promise<string> {
+  const res = await client.query<{ id: string }>(
+    `INSERT INTO demo.social_feed (source, url, content, posted_by_agent_id)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id::text`,
+    [args.source, args.url, args.content, args.postedByAgentId],
+  );
+  return res.rows[0]!.id;
+}
+
+/**
+ * Pick one unread social_feed row for this agent. Marks it read in the same
+ * transaction so concurrent ticks don't double-evaluate the same post.
+ * Returns null when there's nothing fresh to read.
+ */
+export async function pickUnreadSocialPost(
+  client: Pool | PoolClient,
+  agentId: string,
+): Promise<SocialFeedRow | null> {
+  const conn = await ("connect" in client ? client.connect() : Promise.resolve(client as PoolClient));
+  const isOwned = "release" in conn && client !== conn;
+  try {
+    await conn.query("BEGIN");
+    const res = await conn.query<{
+      id: string;
+      source: string;
+      url: string;
+      content: string;
+      posted_by_agent_id: string | null;
+    }>(
+      `SELECT sf.id::text AS id, sf.source, sf.url, sf.content, sf.posted_by_agent_id
+         FROM demo.social_feed sf
+        WHERE NOT EXISTS (
+                SELECT 1 FROM demo.social_feed_read sr
+                 WHERE sr.agent_id = $1 AND sr.feed_id = sf.id
+              )
+        ORDER BY sf.posted_at DESC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED`,
+      [agentId],
+    );
+    const row = res.rows[0];
+    if (row === undefined) {
+      await conn.query("COMMIT");
+      return null;
+    }
+    await conn.query(
+      `INSERT INTO demo.social_feed_read (agent_id, feed_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+      [agentId, row.id],
+    );
+    await conn.query("COMMIT");
+    return {
+      id: row.id,
+      source: row.source,
+      url: row.url,
+      content: row.content,
+      postedByAgentId: row.posted_by_agent_id,
+    };
+  } catch (err) {
+    await conn.query("ROLLBACK").catch(() => {});
+    throw err;
+  } finally {
+    if (isOwned) (conn as PoolClient).release();
+  }
 }
