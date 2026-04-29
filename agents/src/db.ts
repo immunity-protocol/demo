@@ -32,7 +32,13 @@ export function connectPool(databaseUrl: string): Pool {
     // indexer / app / api / relayer connections.
     max: 2,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    // 60 agents reconnect to Fly Postgres in lockstep on cold boot; the
+    // server's accept loop sometimes takes >5s to acknowledge a new
+    // connection during that thundering herd. 30s gives the pool a
+    // realistic budget instead of failing the agent on its first
+    // upsertHeartbeat — supervisor would just immediately respawn it,
+    // which makes the herd worse.
+    connectionTimeoutMillis: 30_000,
     application_name: "immunity-demo-agent",
   });
   return pool;

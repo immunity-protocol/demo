@@ -184,13 +184,17 @@ async function main(): Promise<void> {
   }
 
   const pool = connectPool(cfg.databaseUrl);
-  await upsertHeartbeat(pool, {
+  // Boot-path heartbeat: wrap in retry so a single pg pool acquisition
+  // timeout during the 60-agent boot herd does not crash the process and
+  // make the herd worse. The interval-driven heartbeat below already
+  // swallows errors, so this only protects the very first write.
+  await withBootRetry("upsertHeartbeat", log, () => upsertHeartbeat(pool, {
     agentId: cfg.agentId,
     role: slot.role,
     address: walletAddress,
     displayName,
     axlPeerId,
-  });
+  }));
   const heartbeatTimer = setInterval(() => {
     upsertHeartbeat(pool, {
       agentId: cfg.agentId,
