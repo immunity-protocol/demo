@@ -817,6 +817,22 @@ services:
     depends_on:
       - axl-spoke
 
+  trader-51:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile
+    image: immunity-demo-agent:latest
+    container_name: immunity-demo-trader-51
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      AGENT_ID: trader-51
+      AGENT_ROLE: trader
+      AGENT_DISPLAY_NAME: vigil.eth
+    depends_on:
+      - axl-spoke
+
   wolf-1:
     build:
       context: ./agents
@@ -942,22 +958,6 @@ services:
       AGENT_ID: publisher-5
       AGENT_ROLE: publisher
       AGENT_DISPLAY_NAME: outpost.eth
-    depends_on:
-      - axl-spoke
-
-  watcher-1:
-    build:
-      context: ./agents
-      dockerfile: Dockerfile
-    image: immunity-demo-agent:latest
-    container_name: immunity-demo-watcher-1
-    restart: unless-stopped
-    env_file:
-      - ./.env
-    environment:
-      AGENT_ID: watcher-1
-      AGENT_ROLE: watcher
-      AGENT_DISPLAY_NAME: vigil.eth
     depends_on:
       - axl-spoke
 

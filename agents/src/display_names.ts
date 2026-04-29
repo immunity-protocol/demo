@@ -8,11 +8,13 @@ import type { AgentRole } from "./wallets.js";
  *   - traders: nature/object words that read as benign treasury operators
  *   - wolves: predator imagery so they're easy to spot in stage demos
  *   - publishers: watcher/sentinel imagery - vigilant but neutral
- *   - watcher: a single named external-feed consumer
  *   - scenario: a single named stage actor
  *
  * Lists are positionally indexed (trader-1 ↔ TRADER_NAMES[0], etc.). Editing
  * order is fine; editing names mid-demo is fine; both reattach by agent_id.
+ *
+ * Trader-51 (formerly watcher-1, vigil.eth) reuses its existing 0G-funded
+ * wallet at HD index 58 — see wallets.ts for the override note.
  */
 const TRADER_NAMES: readonly string[] = [
   "whisperingoak.eth", "silvermoss.eth",   "ironroot.eth",     "claybrook.eth",
@@ -27,7 +29,7 @@ const TRADER_NAMES: readonly string[] = [
   "stoneferry.eth",    "graniteford.eth",  "copperhill.eth",   "tinroof.eth",
   "lakehead.eth",      "creekstone.eth",   "barleyfield.eth",  "winterelm.eth",
   "summerash.eth",     "autumnbeech.eth",  "springpoplar.eth", "dusthawthorn.eth",
-  "moonwillow.eth",    "starbirch.eth",
+  "moonwillow.eth",    "starbirch.eth",    "vigil.eth",
 ];
 
 const WOLF_NAMES: readonly string[] = [
@@ -44,14 +46,12 @@ const PUBLISHER_NAMES: readonly string[] = [
   "outpost.eth",
 ];
 
-const WATCHER_NAMES: readonly string[] = ["vigil.eth"];
 const SCENARIO_NAMES: readonly string[] = ["stagehand.eth"];
 
 const NAMES_BY_ROLE: Record<AgentRole, readonly string[]> = {
   trader: TRADER_NAMES,
   wolf: WOLF_NAMES,
   publisher: PUBLISHER_NAMES,
-  watcher: WATCHER_NAMES,
   scenario: SCENARIO_NAMES,
 };
 

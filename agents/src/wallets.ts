@@ -4,29 +4,46 @@ import { HDNodeWallet, Mnemonic } from "ethers";
  * Stable agent IDs map to fixed HD-path indices so a restarted container
  * always derives the same wallet.
  *
- * Index allocation:
- *   trader-1  .. trader-50    →   0 .. 49
- *   wolf-1    .. wolf-3       →  50 .. 52
- *   publisher-1 .. publisher-5 → 53 .. 57
- *   watcher-1                 →  58
- *   scenario-1                →  59
+ * Index allocation (60 wallets total, fixed for all time):
+ *   trader-1  .. trader-50    →   0 .. 49     (50 traders)
+ *   wolf-1    .. wolf-3       →  50 .. 52     (3 wolves)
+ *   publisher-1 .. publisher-5 → 53 .. 57     (5 publishers)
+ *   trader-51                 →  58           (formerly watcher-1; see note)
+ *   scenario-1                →  59           (1 scenario actor)
+ *
+ * Note on trader-51: when the demo evolved from a separate `watcher` role
+ * into the LLM-driven publisher model in 2026-04, the watcher slot at HD
+ * index 58 still held real 0G testnet gas balance. Rather than abandoning
+ * that wallet, we repurposed slot 58 as a 51st trader. This keeps the HD
+ * derivation contract stable for every other agent (wolves and publishers
+ * keep their own 0G), and resurrects the watcher's 0G as fleet trading
+ * capital.
+ *
+ * The override below is the only special case in `parseAgentId`.
  */
-export type AgentRole = "trader" | "wolf" | "publisher" | "watcher" | "scenario";
+export type AgentRole = "trader" | "wolf" | "publisher" | "scenario";
 
 const ROLE_BASE: Record<AgentRole, number> = {
   trader: 0,
   wolf: 50,
   publisher: 53,
-  watcher: 58,
   scenario: 59,
 };
 
 const ROLE_COUNT: Record<AgentRole, number> = {
-  trader: 50,
+  trader: 51,
   wolf: 3,
   publisher: 5,
-  watcher: 1,
   scenario: 1,
+};
+
+/**
+ * Per-agent HD-index overrides. `trader-51` lands at the freed watcher
+ * slot (index 58) instead of the contiguous slot the formula would
+ * compute (50). All other agents fall through to ROLE_BASE + ordinal.
+ */
+const HD_INDEX_OVERRIDES: Record<string, number> = {
+  "trader-51": 58,
 };
 
 export interface AgentSlot {
@@ -50,7 +67,8 @@ export function parseAgentId(agentId: string): AgentSlot {
   if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > max) {
     throw new Error(`agent_id "${agentId}" out of range (1..${max})`);
   }
-  const index = ROLE_BASE[role] + (ordinal - 1);
+  const overrideIdx = HD_INDEX_OVERRIDES[agentId];
+  const index = overrideIdx ?? ROLE_BASE[role] + (ordinal - 1);
   return { agentId, role, index, hdPath: `m/44'/60'/0'/0/${index}` };
 }
 
