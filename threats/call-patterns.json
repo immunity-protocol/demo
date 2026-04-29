@@ -8,7 +8,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 91, "severity": 88, "expires_at": 0,
-    "reasoning": "Any approve() call targeting the Atomic Wallet drainer contract is a drain attempt.",
+    "reasoning": "ERC20 approve(spender, amount) call targeting the consolidation address attributed to the June 2023 Atomic Wallet incident. The selector-only match (no argsTemplate gating) is intentional: any approval to this counterparty enables the drain regardless of token or amount. MALICIOUS at high confidence, severity high: a successful approval here lets Lazarus-attributed infrastructure pull the entire approved balance asynchronously.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   },
@@ -21,7 +21,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
-    "reasoning": "approve() to Pink Drainer family contract - selector-only match.",
+    "reasoning": "Token approval call where the spender is the Pink Drainer affiliate contract. Drainer kits depend on victims signing arbitrary approve calls on phishing pages; once granted, the kit sweeps balance on a separate transaction. Selector-only match keeps the antibody robust to token rotation. Verdict MALICIOUS: there is no benign reason for an agent to approve this counterparty.",
     "seed_source": "scamsniffer_warnlist",
     "evidence_url": "https://github.com/scamsniffer/scam-database"
   },
@@ -34,7 +34,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 89, "severity": 86, "expires_at": 0,
-    "reasoning": "setApprovalForAll(operator, true) to Inferno Drainer - common NFT-drain primitive.",
+    "reasoning": "ERC721 and ERC1155 setApprovalForAll(operator, true) where the operator is an Inferno Drainer collector. This selector grants whole-collection withdraw rights to the operator and is the dominant primitive for NFT phishing drains in Q4 2024 incident reports. MALICIOUS verdict reflects the irreversibility within the approval window: once the kit's sweeper sees the approval, it pulls the entire collection in a single transaction.",
     "seed_source": "slowmist_inferno_q4_2024",
     "evidence_url": "https://slowmist.medium.com/"
   },
@@ -86,7 +86,7 @@
       "argsTemplate": "0x"
     },
     "verdict": "MALICIOUS", "confidence": 92, "severity": 91, "expires_at": 0,
-    "reasoning": "permit() signature submission to Atomic Wallet drainer - gasless approval-to-drain primitive.",
+    "reasoning": "EIP-2612 permit() call submitting a victim's gasless signature with the Atomic Wallet drainer as the spender. Permit-based drains are particularly damaging because the victim's wallet UI shows a signature request rather than a transaction, lowering the suspicion threshold. MALICIOUS at the highest confidence: the only reason to submit a permit naming a sanctioned-attribution drainer is to execute a drain. Severity reflects the full-balance approval semantics of permit.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   }

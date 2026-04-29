@@ -13,7 +13,7 @@
       "taintSetId": "0x746f726e61646f00000000000000000000000000000000000000000000000001"
     },
     "verdict": "MALICIOUS", "confidence": 93, "severity": 89, "expires_at": 0,
-    "reasoning": "OFAC SDN Tornado Cash output set - any 1-hop downstream address inherits SDN-derived risk per Treasury guidance.",
+    "reasoning": "Tainted-set rooted at the five primary Tornado Cash sanctioned addresses from the August 2022 OFAC action. Treasury's subsequent guidance establishes that one-hop downstream addresses inherit SDN-derived sanctions exposure for as long as the funds remain commingled. The graph antibody propagates the address antibodies' MALICIOUS verdict to the immediate downstream cohort, catching wallets that received withdrawals before they appear on any individual sanctions list.",
     "seed_source": "ofac_sdn",
     "evidence_url": "https://ofac.treasury.gov/recent-actions/20220808"
   },
@@ -27,7 +27,7 @@
       "taintSetId": "0x61746f6d69632d77616c6c65742d6472616e6572000000000000000000000001"
     },
     "verdict": "MALICIOUS", "confidence": 87, "severity": 84, "expires_at": 0,
-    "reasoning": "Atomic Wallet drainer downstream cluster - funds traced through chain-hopping to known mixer cohorts.",
+    "reasoning": "Downstream cluster rooted at the Atomic Wallet drainer consolidation address from the June 2023 incident. Elliptic's chain-hopping analysis traces the proceeds through cross-chain bridges into known mixer cohorts, expanding the taint set beyond the single root address. Verdict MALICIOUS: the cluster inherits the Lazarus-attributed status of the root and the practical impossibility of distinguishing victim refunds from operator movements within the cluster.",
     "seed_source": "elliptic_atomic_2023",
     "evidence_url": "https://www.elliptic.co/blog/the-100-million-atomic-wallet-heist-may-be-the-work-of-north-koreas-lazarus-group"
   },
@@ -42,7 +42,7 @@
       "taintSetId": "0x6472616e65722d63616d706169676e2d3230323400000000000000000000000a"
     },
     "verdict": "MALICIOUS", "confidence": 85, "severity": 82, "expires_at": 0,
-    "reasoning": "Cross-family drainer cluster - Inferno + Pink share laundering rails per ScamSniffer aggregation 2024.",
+    "reasoning": "Two-address cluster spanning the Inferno Drainer and Pink Drainer collection wallets. ScamSniffer's 2024 aggregation found that despite distinct kits and operators, both families consolidate proceeds through a shared laundering pipeline, so the graph relationship is operationally meaningful even though the on-chain entities are nominally separate. MALICIOUS verdict propagates the underlying address antibodies' classification to the joint cluster.",
     "seed_source": "scamsniffer_warnlist",
     "evidence_url": "https://github.com/scamsniffer/scam-database"
   },
@@ -73,7 +73,7 @@
       "taintSetId": "0x6d65762d73616e64776963682d626f74732d76310000000000000000000000a0"
     },
     "verdict": "SUSPICIOUS", "confidence": 76, "severity": 64, "expires_at": 0,
-    "reasoning": "MEV sandwich-bot cluster. Touches and graph neighbors are extracting value from retail swaps.",
+    "reasoning": "Cluster of two persistently-active sandwich-MEV operators (jaredfromsubway.eth and a sibling wallet). Graph neighbors of these addresses include searchers, builders, and intermediate funding wallets that participate in the sandwich pipeline. SUSPICIOUS rather than MALICIOUS because sandwich extraction occupies a contested category (adversarial against retail swappers but not technically theft), and a low-severity calibration reflects the per-victim slippage rather than total loss profile.",
     "seed_source": "mev_explorer",
     "evidence_url": "https://mevwatch.info/"
   }
