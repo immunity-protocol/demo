@@ -13,7 +13,7 @@ import {
   upsertHeartbeat,
 } from "./db.js";
 import { displayNameFor } from "./display_names.js";
-import { defaultFundingConfig, ensureFundedWallet } from "./funding.js";
+import { defaultFundingConfig, ensureFundedWallet, ensureTeeReady } from "./funding.js";
 import { createLogger } from "./log.js";
 import { deriveWallet, parseAgentId } from "./wallets.js";
 import type { AmbientContext } from "./context.js";
@@ -73,15 +73,24 @@ async function withBootRetry<T>(
     warn: (message: string, fields?: Record<string, unknown>) => void;
   },
   fn: () => Promise<T>,
-  attempts = 5,
+  attempts = 10,
 ): Promise<T> {
+  // Exponential backoff capped at 120s. With 10 attempts, the worst-case
+  // retry window is ~10 minutes — long enough that a 60-agent thundering
+  // herd against the 0G RPC's 50 req/s cap eventually clears (the early
+  // agents settle into their normal 45-180s tick cadence and free RPC
+  // headroom for the laggards). Jitter (random 0-1s) decorrelates retries
+  // so two stuck agents don't keep landing on the same throttled second.
+  const MAX_BACKOFF_MS = 120_000;
   let lastErr: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (err) {
       lastErr = err;
-      const backoffMs = 2_000 * Math.pow(2, i) + Math.floor(Math.random() * 1_000);
+      const exp = 2_000 * Math.pow(2, i);
+      const capped = Math.min(exp, MAX_BACKOFF_MS);
+      const backoffMs = capped + Math.floor(Math.random() * 1_000);
       log.warn("boot step failed; retrying", { step: label, attempt: i + 1, of: attempts, backoff_ms: backoffMs, err: String(err).slice(0, 200) });
       await sleep(backoffMs);
     }
@@ -141,12 +150,24 @@ async function main(): Promise<void> {
     axlUrl: cfg.axlUrl,
     novelThreatPolicy: "verify",
     semanticAutoMint: true,
+    // Lower TEE Compute ledger floors so each agent's ~0.3 OG balance is
+    // enough to bring up the verifier. Without these overrides the SDK
+    // calls addLedger(3) which fails with "insufficient funds" and the
+    // agent silently falls back to trust-cache (no SEMANTIC auto-mint).
+    minLedgerOg: 0.1,
+    minProviderOg: 0.05,
   });
   await withBootRetry("immunity.start", log, () => immunity.start());
 
   await withBootRetry("ensureFundedWallet", log, () =>
     ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log),
   );
+
+  // Pre-fund the 0G Compute ledger so the lazy TEE init triggered by the
+  // first novel-threat check finds an already-funded broker. Idempotent
+  // and best-effort: a failure here just means TEE stays cold for now,
+  // not that the agent boot fails.
+  await ensureTeeReady(immunity, log, { minLedgerOg: 0.1, minProviderOg: 0.05 });
 
   // Read our AXL spoke pubkey at boot so wolves can DM us by full pubkey
   // (the X-From-Peer-Id on /recv is a truncated prefix and cannot be used
