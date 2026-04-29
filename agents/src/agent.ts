@@ -1,6 +1,8 @@
 import { Immunity } from "@immunity-protocol/sdk";
 import { type FeeData, FeeData as FeeDataCtor, JsonRpcProvider, Wallet } from "ethers";
 import { runAmbient } from "./ambient/index.js";
+import { AxlClient } from "./axl/client.js";
+import { drainInbox } from "./axl/inbox.js";
 import { runCommand } from "./commands/index.js";
 import {
   closePool,
@@ -146,12 +148,26 @@ async function main(): Promise<void> {
     ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log),
   );
 
+  // Read our AXL spoke pubkey at boot so wolves can DM us by full pubkey
+  // (the X-From-Peer-Id on /recv is a truncated prefix and cannot be used
+  // as a destination — see AXL skill notes).
+  const axl = new AxlClient(cfg.axlUrl);
+  let axlPeerId: string | null = null;
+  try {
+    const topo = await axl.topology();
+    axlPeerId = topo.our_public_key;
+    log.info("axl peer-id resolved", { peer_id: axlPeerId.slice(0, 16) });
+  } catch (err) {
+    log.warn("axl topology failed; agent runs without DM intake this session", { err: String(err) });
+  }
+
   const pool = connectPool(cfg.databaseUrl);
   await upsertHeartbeat(pool, {
     agentId: cfg.agentId,
     role: slot.role,
     address: walletAddress,
     displayName,
+    axlPeerId,
   });
   const heartbeatTimer = setInterval(() => {
     upsertHeartbeat(pool, {
@@ -159,6 +175,7 @@ async function main(): Promise<void> {
       role: slot.role,
       address: walletAddress,
       displayName,
+      axlPeerId,
     }).catch((err) => log.error("heartbeat failed", { err: String(err) }));
   }, HEARTBEAT_INTERVAL_MS);
 
@@ -185,6 +202,12 @@ async function main(): Promise<void> {
 
   while (!stopping) {
     try {
+      // Drain any AXL DMs first so wolf-pushed social_dm messages are
+      // evaluated before this tick's ambient action. Bounded internally
+      // (MAX_DRAIN_PER_TICK in inbox.ts) so a flood does not starve the
+      // tick.
+      await drainInbox(ctx, axl);
+
       const cmd = await dequeueCommand(pool, cfg.agentId);
       if (cmd !== null) {
         log.info("command picked up", { command_id: cmd.id, command_type: cmd.commandType });
