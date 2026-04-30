@@ -159,15 +159,13 @@ async function main(): Promise<void> {
     defaultChainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
   }) : null;
 
-  // Antibodies the operator has retired locally. The deployed Registry's
-  // slash() is owner-only and we don't hold the owner key, so chain-side
-  // retirement isn't available — the SDK's `denyKeccakIds` filter mutes
-  // both Tier-1 cache hits and Tier-2 chain-lookup hits for these
-  // entries. Add a new keccak when an auto-mint goes wrong; remove once
-  // the entry is properly retired on chain.
-  const KECCAK_DENYLIST: ReadonlyArray<`0x${string}`> = [
-    "0xb9cc1b4c215b656bc11375d61d66508d06bb2c27476956f5ec9db8745c6ae425", // IMM-2026-0046: bad ADDRESS auto-mint targeting MOCK_USDC
-  ];
+  // Antibodies the operator wants the local agent to mute despite chain
+  // status. Empty in steady state — populate with a keccak only as a
+  // stopgap when an auto-mint goes wrong AND the chain-side `slash`
+  // isn't immediately reachable. Once an entry is slashed on chain the
+  // matchers honor the SLASHED status automatically and the denylist
+  // entry becomes redundant; remove it then.
+  const KECCAK_DENYLIST: ReadonlyArray<`0x${string}`> = [];
 
   const immunity = new Immunity({
     wallet,
