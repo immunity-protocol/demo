@@ -135,16 +135,16 @@ export function createClaudeTeeShim(opts: ClaudeShimOptions = {}): TeeVerifyFn |
         };
       }
     }
-    // ADDRESS auto-mint mirrors the SDK's TEE path: only fire if the tx
-    // surfaces a counterparty the verdict points to. Cheap to do here
-    // because the dashboard's interesting demo case is the SEMANTIC one.
-    if (!publishSeed && verdict.abType === "ADDRESS" && tx?.to) {
-      publishSeed = {
-        abType: "ADDRESS",
-        chainId: tx.chainId ?? defaultChainId,
-        target: tx.to,
-      };
-    }
+    // No ADDRESS auto-mint from the shim. `tx.to` for any ERC-20 call is
+    // the token contract, not the malicious counterparty — using it as a
+    // seed target would mint an antibody for USDC and brick every
+    // legitimate trader tx. The SDK's `seedFromTx` would normally derive
+    // the right address from the calldata, but it isn't exported, and
+    // mid-shim duplication of its calldata-decoding rules is the kind of
+    // subtle bug we just hit. SEMANTIC auto-mint stays — it's a
+    // self-validating path (verbatim marker presence in bundle) and is
+    // where Claude's signal is genuinely additive over the cache.
+    void defaultChainId;
 
     return {
       block: block && publishSeed !== undefined,
