@@ -177,6 +177,23 @@ async function main(): Promise<void> {
   });
   await withBootRetry("immunity.start", log, () => immunity.start());
 
+  // Local-only denylist of keccak ids the operator has decided to retire.
+  // Bootstrap re-fetches them from chain on every restart (the antibody
+  // is still ACTIVE in the Registry), so we drop them here once the cache
+  // is populated. Re-applied on every gossip arrival isn't necessary for
+  // demo time-scale; the bootstrap-then-drop covers the dominant case.
+  // Add new entries when an auto-mint goes wrong and a chain-side slash
+  // isn't reachable (Registry.slash is owner-only on the deployed
+  // contract). Remove the entry once the chain entry is properly retired.
+  const KECCAK_DENYLIST: ReadonlyArray<`0x${string}`> = [
+    "0xb9cc1b4c215b656bc11375d61d66508d06bb2c27476956f5ec9db8745c6ae425", // IMM-2026-0046: bad ADDRESS auto-mint targeting MOCK_USDC contract
+  ];
+  for (const keccak of KECCAK_DENYLIST) {
+    if (immunity.dropFromCache(keccak)) {
+      log.info("dropped denylisted antibody from cache", { keccak });
+    }
+  }
+
   await withBootRetry("ensureFundedWallet", log, () =>
     ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log),
   );
