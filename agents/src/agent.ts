@@ -4,6 +4,7 @@ import { runAmbient } from "./ambient/index.js";
 import { AxlClient } from "./axl/client.js";
 import { drainInbox } from "./axl/inbox.js";
 import { runCommand } from "./commands/index.js";
+import { createClaudeTeeShim } from "./llm/claude-tee-shim.js";
 import {
   closePool,
   connectPool,
@@ -145,18 +146,26 @@ async function main(): Promise<void> {
   const wallet = new Wallet(baseWallet.privateKey, provider);
   const walletAddress = await wallet.getAddress();
 
+  // Per-agent 0G Compute ledger needs 3 OG to bootstrap (protocol minimum
+  // on `addLedger`). Demo wallets have ~0.3 OG, so the TEE path can't
+  // come up. Wire in the Claude shim — same prompt, same outcome shape,
+  // Anthropic backend instead of qwen-on-0G — so novel checks still get
+  // verified by an LLM instead of falling through to permissive
+  // trust-cache. When the deployer is funded with ~150 OG and we top up
+  // each trader, drop the override and the SDK uses the real broker
+  // automatically.
+  const teeVerifier = slot.role === "trader" ? createClaudeTeeShim({
+    semanticAutoMint: true,
+    defaultChainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
+  }) : null;
+
   const immunity = new Immunity({
     wallet,
     network: "testnet",
     axlUrl: cfg.axlUrl,
     novelThreatPolicy: "verify",
     semanticAutoMint: true,
-    // Lower TEE Compute ledger floors so each agent's ~0.3 OG balance is
-    // enough to bring up the verifier. Without these overrides the SDK
-    // calls addLedger(3) which fails with "insufficient funds" and the
-    // agent silently falls back to trust-cache (no SEMANTIC auto-mint).
-    minLedgerOg: 0.1,
-    minProviderOg: 0.05,
+    ...(teeVerifier ? { teeVerifier } : {}),
     // Cache bootstrap pressure on the 0G testnet's 50 req/s public RPC
     // is the chief reason agents come up with empty caches in the
     // packed-fleet config. Sequentializing per-agent fetches (concurrency=1)
