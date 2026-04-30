@@ -159,6 +159,16 @@ async function main(): Promise<void> {
     defaultChainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
   }) : null;
 
+  // Antibodies the operator has retired locally. The deployed Registry's
+  // slash() is owner-only and we don't hold the owner key, so chain-side
+  // retirement isn't available — the SDK's `denyKeccakIds` filter mutes
+  // both Tier-1 cache hits and Tier-2 chain-lookup hits for these
+  // entries. Add a new keccak when an auto-mint goes wrong; remove once
+  // the entry is properly retired on chain.
+  const KECCAK_DENYLIST: ReadonlyArray<`0x${string}`> = [
+    "0xb9cc1b4c215b656bc11375d61d66508d06bb2c27476956f5ec9db8745c6ae425", // IMM-2026-0046: bad ADDRESS auto-mint targeting MOCK_USDC
+  ];
+
   const immunity = new Immunity({
     wallet,
     network: "testnet",
@@ -166,6 +176,7 @@ async function main(): Promise<void> {
     novelThreatPolicy: "verify",
     semanticAutoMint: true,
     ...(teeVerifier ? { teeVerifier } : {}),
+    denyKeccakIds: KECCAK_DENYLIST,
     // Cache bootstrap pressure on the 0G testnet's 50 req/s public RPC
     // is the chief reason agents come up with empty caches in the
     // packed-fleet config. Sequentializing per-agent fetches (concurrency=1)
@@ -177,17 +188,12 @@ async function main(): Promise<void> {
   });
   await withBootRetry("immunity.start", log, () => immunity.start());
 
-  // Local-only denylist of keccak ids the operator has decided to retire.
-  // Bootstrap re-fetches them from chain on every restart (the antibody
-  // is still ACTIVE in the Registry), so we drop them here once the cache
-  // is populated. Re-applied on every gossip arrival isn't necessary for
-  // demo time-scale; the bootstrap-then-drop covers the dominant case.
-  // Add new entries when an auto-mint goes wrong and a chain-side slash
-  // isn't reachable (Registry.slash is owner-only on the deployed
-  // contract). Remove the entry once the chain entry is properly retired.
-  const KECCAK_DENYLIST: ReadonlyArray<`0x${string}`> = [
-    "0xb9cc1b4c215b656bc11375d61d66508d06bb2c27476956f5ec9db8745c6ae425", // IMM-2026-0046: bad ADDRESS auto-mint targeting MOCK_USDC contract
-  ];
+  // Belt-and-suspenders: also evict any denylisted entries from the
+  // local cache after start(). The SDK's check-flow already filters
+  // hits at match-time via `denyKeccakIds` (passed in the config above),
+  // but pruning the cache too keeps memory tidy and avoids the entry
+  // re-emerging if a future SDK change ever bypasses the match-time
+  // filter on a code path I'm not anticipating.
   for (const keccak of KECCAK_DENYLIST) {
     if (immunity.dropFromCache(keccak)) {
       log.info("dropped denylisted antibody from cache", { keccak });
