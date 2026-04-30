@@ -181,11 +181,16 @@ async function main(): Promise<void> {
     ensureFundedWallet(immunity, wallet, walletAddress, defaultFundingConfig(process.env), log),
   );
 
-  // Pre-fund the 0G Compute ledger so the lazy TEE init triggered by the
-  // first novel-threat check finds an already-funded broker. Idempotent
-  // and best-effort: a failure here just means TEE stays cold for now,
-  // not that the agent boot fails.
-  await ensureTeeReady(immunity, log, { minLedgerOg: 0.1, minProviderOg: 0.05 });
+  // Skip the on-chain TEE ledger top-up when the Claude shim is wired
+  // (the shim doesn't need a 0G Compute account). When the deployer is
+  // funded and we drop the shim, this comes back automatically.
+  if (!teeVerifier) {
+    // Pre-fund the 0G Compute ledger so the lazy TEE init triggered by
+    // the first novel-threat check finds an already-funded broker.
+    // Idempotent and best-effort: a failure here just means TEE stays
+    // cold for now, not that the agent boot fails.
+    await ensureTeeReady(immunity, log, { minLedgerOg: 0.1, minProviderOg: 0.05 });
+  }
 
   // Read our AXL spoke pubkey at boot so wolves can DM us by full pubkey
   // (the X-From-Peer-Id on /recv is a truncated prefix and cannot be used
@@ -254,6 +259,39 @@ async function main(): Promise<void> {
 
   log.info("agent ready", { wallet: walletAddress });
 
+  // node-postgres pool clients silently die when the underlying TCP
+  // connection drops (Fly Postgres maintenance, idle timeout, network
+  // blip). Subsequent borrows succeed but every query fails with
+  // "Connection terminated unexpectedly" forever. Detect that pattern
+  // and exit non-zero so supervisord respawns this process — same fix
+  // we applied to the indexer for PDO. Tracks consecutive matching
+  // failures across tick + heartbeat so we don't bail on a one-off blip.
+  let consecutiveConnLost = 0;
+  const CONN_LOST_THRESHOLD = 5;
+  const isConnLost = (e: unknown): boolean => {
+    const m = String(e).toLowerCase();
+    return m.includes("connection terminated")
+      || m.includes("server has gone away")
+      || m.includes("connection refused")
+      || m.includes("broken pipe")
+      || m.includes("lost connection");
+  };
+  const onTickResult = (err?: unknown): void => {
+    if (err === undefined) {
+      consecutiveConnLost = 0;
+      return;
+    }
+    if (isConnLost(err)) {
+      consecutiveConnLost++;
+      if (consecutiveConnLost >= CONN_LOST_THRESHOLD) {
+        log.error("pg connection lost repeatedly; exiting for supervisord respawn", {
+          consecutive: consecutiveConnLost,
+        });
+        process.exit(3);
+      }
+    }
+  };
+
   while (!stopping) {
     try {
       // Drain any AXL DMs first so wolf-pushed social_dm messages are
@@ -282,8 +320,10 @@ async function main(): Promise<void> {
           await runAmbient(slot.role, ctx);
         }
       }
+      onTickResult();
     } catch (err) {
       log.error("tick failed", { err: String(err) });
+      onTickResult(err);
     }
     await sleep(jitteredInterval(cfg.tickMinMs, cfg.tickMaxMs));
   }
