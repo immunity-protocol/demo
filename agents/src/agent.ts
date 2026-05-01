@@ -147,17 +147,28 @@ async function main(): Promise<void> {
   const walletAddress = await wallet.getAddress();
 
   // Per-agent 0G Compute ledger needs 3 OG to bootstrap (protocol minimum
-  // on `addLedger`). Demo wallets have ~0.3 OG, so the TEE path can't
-  // come up. Wire in the Claude shim — same prompt, same outcome shape,
-  // Anthropic backend instead of qwen-on-0G — so novel checks still get
-  // verified by an LLM instead of falling through to permissive
-  // trust-cache. When the deployer is funded with ~150 OG and we top up
-  // each trader, drop the override and the SDK uses the real broker
-  // automatically.
-  const teeVerifier = slot.role === "trader" ? createClaudeTeeShim({
-    semanticAutoMint: true,
-    defaultChainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
-  }) : null;
+  // on `addLedger`). The deployer can fund only a slice of the fleet at
+  // 3+ OG; the rest sit at the demo default of 0.3 OG. TEE_REAL_AGENTS is
+  // a comma-separated allow-list of agent ids that the funding script
+  // tops up to 3+ OG; for those agents we leave teeVerifier=null and the
+  // SDK uses the real 0G Compute broker. Everyone else (traders and
+  // scenarios) gets the Claude shim so novel-threat detection still
+  // works, just without on-chain attestation. Wolves and publishers
+  // never call the verify path, so their teeVerifier stays null and the
+  // ledger init is silent-fail (harmless because they never invoke it).
+  const realTeeAgents = (process.env.TEE_REAL_AGENTS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const useRealTee = realTeeAgents.includes(slot.agentId);
+  const teeVerifier = useRealTee
+    ? null
+    : (slot.role === "trader" || slot.role === "scenario")
+      ? createClaudeTeeShim({
+          semanticAutoMint: true,
+          defaultChainId: Number.parseInt(process.env.GALILEO_CHAIN_ID ?? "16602", 10),
+        })
+      : null;
 
   // Antibodies the operator wants the local agent to mute despite chain
   // status. Empty in steady state — populate with a keccak only as a
