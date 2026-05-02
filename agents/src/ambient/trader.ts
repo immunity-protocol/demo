@@ -157,8 +157,18 @@ async function maybeScanSocialFeed(ctx: AmbientContext): Promise<boolean> {
   const context: CheckContext = {
     sources: [{ url: row.url, extractedText: row.content }],
   };
+  // Synthetic proposed-tx represents what the agent was *about* to do
+  // when it scraped this post: a treasury-sized USDC transfer. Without
+  // it, extractFacts() returns all-zero and the on-chain Matched event
+  // emitted by a successful block carries no token+amount; the indexer
+  // can't price the threat, so the auto-minted antibody ends up with
+  // value_protected_usd = 0. Same lognormal distribution as ambient
+  // swaps so the value blends in with organic tx flow.
+  const env = txEnv();
+  const notional = lognormalUsdcAmount(500, 50_000);
+  const syntheticTx = buildErc20Transfer(env, randomAddress(), notional);
   try {
-    const result = await ctx.immunity.check(null, context);
+    const result = await ctx.immunity.check(syntheticTx, context);
     // Resolve the wolf's display name when the post was authored by another
     // agent in the fleet. Seeded baseline rows (postedByAgentId === null)
     // get a "(seeded)" label so the feed event is still self-explanatory.
