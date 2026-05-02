@@ -30,6 +30,7 @@ interface AgentConfig {
   rpcUrl: string;
   tickMinMs: number;
   tickMaxMs: number;
+  fastIntervalMs: number;
 }
 
 function loadConfig(): AgentConfig {
@@ -49,6 +50,7 @@ function loadConfig(): AgentConfig {
     rpcUrl:      env.GALILEO_RPC_URL ?? "https://evmrpc-testnet.0g.ai",
     tickMinMs:   Number.parseInt(env.AGENT_TICK_MIN_MS ?? "15000", 10),
     tickMaxMs:   Number.parseInt(env.AGENT_TICK_MAX_MS ?? "90000", 10),
+    fastIntervalMs: Number.parseInt(env.AGENT_FAST_INTERVAL_MS ?? "2000", 10),
   };
 }
 
@@ -336,41 +338,79 @@ async function main(): Promise<void> {
     }
   };
 
-  while (!stopping) {
-    try {
-      // Drain any AXL DMs first so wolf-pushed social_dm messages are
-      // evaluated before this tick's ambient action. Bounded internally
-      // (MAX_DRAIN_PER_TICK in inbox.ts) so a flood does not starve the
-      // tick.
-      await drainInbox(ctx, axl);
+  // Two concurrent loops:
+  //   - fast loop (every ~fastIntervalMs): drain AXL inbox + dequeue any
+  //     pending command. Both are cheap polls. This is what gives playground
+  //     commands a few-second response time instead of waiting up to the full
+  //     ambient tick window (15-90s).
+  //   - slow loop (jittered tickMinMs..tickMaxMs): ambient behaviour (swaps,
+  //     transfers, feed scans). Stays slow on purpose to keep RPC + DB
+  //     pressure bounded across the 45-agent fleet.
+  // Both loops contend for the same wallet + SDK + Immunity registry
+  // settlements, so we serialize their critical sections behind a tiny
+  // in-memory mutex. If a slow ambient swap is mid-flight when a command
+  // arrives, the command waits at most one ambient step (a few seconds).
+  let busy = false;
+  const tryAcquire = (): boolean => {
+    if (busy) return false;
+    busy = true;
+    return true;
+  };
+  const release = (): void => { busy = false; };
 
-      const cmd = await dequeueCommand(pool, cfg.agentId);
-      if (cmd !== null) {
-        log.info("command picked up", { command_id: cmd.id, command_type: cmd.commandType });
+  const fastLoop = async (): Promise<void> => {
+    while (!stopping) {
+      if (tryAcquire()) {
         try {
-          const result = await runCommand(cmd, ctx);
-          await markCommandComplete(pool, cmd.id, result);
-          log.info("command complete", { command_id: cmd.id, status: result.status });
+          await drainInbox(ctx, axl);
+          const cmd = await dequeueCommand(pool, cfg.agentId);
+          if (cmd !== null) {
+            log.info("command picked up", { command_id: cmd.id, command_type: cmd.commandType });
+            try {
+              const result = await runCommand(cmd, ctx);
+              await markCommandComplete(pool, cmd.id, result);
+              log.info("command complete", { command_id: cmd.id, status: result.status });
+            } catch (err) {
+              await markCommandComplete(pool, cmd.id, {
+                status: "failed",
+                detail: { error: String(err) },
+              });
+              log.error("command failed", { command_id: cmd.id, err: String(err) });
+            }
+          }
+          onTickResult();
         } catch (err) {
-          await markCommandComplete(pool, cmd.id, {
-            status: "failed",
-            detail: { error: String(err) },
-          });
-          log.error("command failed", { command_id: cmd.id, err: String(err) });
-        }
-      } else {
-        const fleet = await getFleetState(pool);
-        if (!fleet.ambientPaused) {
-          await runAmbient(slot.role, ctx);
+          log.error("fast tick failed", { err: String(err) });
+          onTickResult(err);
+        } finally {
+          release();
         }
       }
-      onTickResult();
-    } catch (err) {
-      log.error("tick failed", { err: String(err) });
-      onTickResult(err);
+      await sleep(cfg.fastIntervalMs);
     }
-    await sleep(jitteredInterval(cfg.tickMinMs, cfg.tickMaxMs));
-  }
+  };
+
+  const slowLoop = async (): Promise<void> => {
+    while (!stopping) {
+      if (tryAcquire()) {
+        try {
+          const fleet = await getFleetState(pool);
+          if (!fleet.ambientPaused) {
+            await runAmbient(slot.role, ctx);
+          }
+          onTickResult();
+        } catch (err) {
+          log.error("slow tick failed", { err: String(err) });
+          onTickResult(err);
+        } finally {
+          release();
+        }
+      }
+      await sleep(jitteredInterval(cfg.tickMinMs, cfg.tickMaxMs));
+    }
+  };
+
+  await Promise.all([fastLoop(), slowLoop()]);
 }
 
 main().catch((err) => {
