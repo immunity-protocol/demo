@@ -12,6 +12,7 @@
     "supervisor:generate": "tsx scripts/generate-supervisor-conf.ts",
     "threats:publish": "tsx --env-file=.env scripts/publish-threats.ts",
     "fund:og": "tsx --env-file=.env scripts/fund-agents-og.ts",
+    "treasury": "tsx --env-file=.env scripts/treasury.ts",
     "test:incidents": "tsx scripts/test-incidents.ts",
     "axl:up": "scripts/axl-spoke-host.sh up",
     "axl:down": "scripts/axl-spoke-host.sh down",
@@ -19,7 +20,7 @@
     "postinstall": "node scripts/patch-0g-broker.mjs"
   },
   "devDependencies": {
-    "@immunity-protocol/sdk": "file:./.tarballs/immunity-protocol-sdk-0.6.10.tgz",
+    "@immunity-protocol/sdk": "file:.tarballs/immunity-protocol-sdk-0.6.10.tgz",
     "@types/node": "^20.14.0",
     "ethers": "^6.14.0",
     "tsx": "^4.16.0",
