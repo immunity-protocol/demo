@@ -185,6 +185,18 @@ async function main(): Promise<void> {
     novelThreatPolicy: "verify",
     semanticAutoMint: true,
     ...(teeVerifier ? { teeVerifier } : {}),
+    // SUSPICIOUS verdicts (TEE not certain enough to auto-block) are
+    // routed through onEscalate. Returning false makes them block AND,
+    // when verdict.publishSeed is present, mint+gossip the antibody.
+    // Without a handler the SDK throws no-handler and the verify call
+    // errors, so silent SUSPICIOUS flow is worse than block-by-default.
+    onEscalate: async (escCtx) => {
+      log.info("escalation blocked by default", {
+        reason: escCtx.reason,
+        confidence: escCtx.confidence,
+      });
+      return false;
+    },
     denyKeccakIds: KECCAK_DENYLIST,
     // Cache bootstrap pressure on the 0G testnet's 50 req/s public RPC
     // is the chief reason agents come up with empty caches in the
